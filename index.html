@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#5b5bd6" />
+  <meta name="description" content="메트로놈, 음정 튜너, 코드 진행 생성기를 한곳에서 사용하는 가벼운 음악 연습 도구" />
+  <title>훈뮤직툴</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">HOON MUSIC TOOL</p>
+        <h1>훈뮤직툴</h1>
+      </div>
+      <button id="installBtn" class="icon-btn install-btn" hidden aria-label="앱 설치">설치</button>
+    </header>
+
+    <nav class="tabs" aria-label="주요 기능">
+      <button class="tab is-active" data-tab="metronome" aria-selected="true">메트로놈</button>
+      <button class="tab" data-tab="tuner" aria-selected="false">튜너</button>
+      <button class="tab" data-tab="chords" aria-selected="false">코드 생성기</button>
+    </nav>
+
+    <main>
+      <section id="metronome" class="panel is-active" aria-labelledby="metronome-title">
+        <div class="card tempo-card">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">TEMPO</p>
+              <h2 id="metronome-title">메트로놈</h2>
+            </div>
+            <span id="tempoLabel" class="tempo-label">보통 빠르기</span>
+          </div>
+
+          <div class="bpm-display" aria-live="polite">
+            <button id="bpmMinus" class="step-btn" aria-label="BPM 1 낮추기">−</button>
+            <div>
+              <strong id="bpmValue">100</strong>
+              <span>BPM</span>
+            </div>
+            <button id="bpmPlus" class="step-btn" aria-label="BPM 1 높이기">＋</button>
+          </div>
+
+          <input id="bpmSlider" class="range" type="range" min="30" max="240" value="100" aria-label="BPM" />
+
+          <div class="beat-indicators" id="beatIndicators" aria-label="박자 표시"></div>
+
+          <div class="control-grid">
+            <label>
+              <span>박자</span>
+              <select id="timeSignature">
+                <option value="2">2/4</option>
+                <option value="3">3/4</option>
+                <option value="4" selected>4/4</option>
+                <option value="6">6/8</option>
+              </select>
+            </label>
+            <label>
+              <span>볼륨</span>
+              <input id="metronomeVolume" class="range compact" type="range" min="0" max="100" value="70" />
+            </label>
+          </div>
+
+          <div class="action-row">
+            <button id="tapTempo" class="secondary-btn">TAP</button>
+            <button id="toggleMetronome" class="primary-btn">시작</button>
+          </div>
+          <p class="helper">TAP 버튼을 일정한 간격으로 4번 이상 누르면 BPM이 계산됩니다.</p>
+        </div>
+      </section>
+
+
+      <section id="tuner" class="panel" aria-labelledby="tuner-title">
+        <div class="card tuner-card">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">TUNER</p>
+              <h2 id="tuner-title">음정 튜너</h2>
+            </div>
+            <span id="tunerStatusBadge" class="tempo-label tuner-badge">대기 중</span>
+          </div>
+
+          <div class="tuner-settings">
+            <label>
+              <span>튜닝 모드</span>
+              <select id="tuningMode">
+                <option value="chromatic">크로매틱</option>
+                <option value="guitarStandard">기타 표준 E A D G B E</option>
+                <option value="guitarDropD">기타 Drop D</option>
+              </select>
+            </label>
+            <label>
+              <span>기준음 A4</span>
+              <div class="reference-control">
+                <button id="a4Minus" class="mini-step" type="button" aria-label="기준음 1Hz 낮추기">−</button>
+                <input id="a4Reference" type="number" min="430" max="450" value="440" inputmode="numeric" aria-label="A4 기준 주파수" />
+                <button id="a4Plus" class="mini-step" type="button" aria-label="기준음 1Hz 높이기">＋</button>
+              </div>
+            </label>
+          </div>
+
+          <div class="tuner-display" aria-live="polite">
+            <p id="tunerTarget" class="tuner-target">마이크를 시작해 주세요</p>
+            <strong id="detectedNote" class="detected-note">--</strong>
+            <div class="pitch-values">
+              <span id="detectedFrequency">-- Hz</span>
+              <span id="detectedCents">-- cents</span>
+            </div>
+          </div>
+
+          <div class="tuning-meter" aria-label="음정 오차 표시">
+            <div class="meter-track">
+              <span class="meter-mark left">-50</span>
+              <span class="meter-mark center">0</span>
+              <span class="meter-mark right">+50</span>
+              <div id="tunerNeedle" class="meter-needle"></div>
+            </div>
+            <div class="meter-labels"><span>낮음</span><span>정확</span><span>높음</span></div>
+          </div>
+
+          <button id="toggleTuner" class="primary-btn tuner-toggle" type="button">튜너 시작</button>
+          <p id="tunerMessage" class="helper tuner-message">조용한 곳에서 악기 한 음을 길게 연주하면 더 정확하게 감지됩니다.</p>
+          <p class="privacy-note">마이크 소리는 기기 안에서만 분석되며 저장하거나 전송하지 않습니다.</p>
+        </div>
+      </section>
+
+      <section id="chords" class="panel" aria-labelledby="chords-title">
+        <div class="card">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">CHORDS</p>
+              <h2 id="chords-title">코드 진행 생성기</h2>
+            </div>
+            <button id="randomizeBtn" class="text-btn">다시 생성</button>
+          </div>
+
+          <div class="form-grid">
+            <label>
+              <span>조성</span>
+              <select id="keySelect">
+                <option>C</option><option>C#</option><option>D</option><option>Eb</option>
+                <option>E</option><option>F</option><option>F#</option><option>G</option>
+                <option>Ab</option><option>A</option><option>Bb</option><option>B</option>
+              </select>
+            </label>
+            <label>
+              <span>분위기</span>
+              <select id="moodSelect">
+                <option value="bright">밝고 편안함</option>
+                <option value="emotional">감성적</option>
+                <option value="powerful">강하고 시원함</option>
+                <option value="dreamy">몽환적</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="chord-result">
+            <p id="romanProgression" class="roman">I – V – vi – IV</p>
+            <div id="chordCards" class="chord-cards"></div>
+          </div>
+
+          <div class="playback-controls">
+            <label>
+              <span>재생 BPM</span>
+              <input id="chordBpm" type="number" min="40" max="200" value="90" inputmode="numeric" />
+            </label>
+            <button id="playProgression" class="primary-btn">코드 재생</button>
+          </div>
+
+          <div class="action-row split">
+            <button id="copyProgression" class="secondary-btn">코드 복사</button>
+            <button id="stopProgression" class="secondary-btn">정지</button>
+          </div>
+          <p id="copyStatus" class="helper" aria-live="polite"></p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>브라우저에서 실행되는 개인용 음악 연습 도구 · v1.1</p>
+    </footer>
+  </div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

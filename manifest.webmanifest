@@ -1,0 +1,25 @@
+{
+  "name": "훈뮤직툴 - 메트로놈·튜너·코드 생성기",
+  "short_name": "훈뮤직툴",
+  "description": "메트로놈, 음정 튜너, 코드 진행 생성기를 한곳에서 사용하는 음악 연습 도구",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f5fb",
+  "theme_color": "#5b5bd6",
+  "lang": "ko-KR",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
