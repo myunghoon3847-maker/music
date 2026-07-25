@@ -14,7 +14,14 @@ const state = {
   chordTimers: [],
   chordOscillators: [],
   progression: [],
+  progressionDegrees: [],
   roman: [],
+  selectedChordIndex: 0,
+  progressionLoopTimer: null,
+  progressionPlaying: false,
+  nextProgressionStart: 0,
+  progressionCycleDuration: 0,
+  savedProgressions: [],
   deferredInstallPrompt: null,
   tunerRunning: false,
   tunerStarting: false,
@@ -26,62 +33,273 @@ const state = {
   tunerBuffer: null,
   tunerYinBuffer: null,
   tunerPitchHistory: [],
-  tunerMissCount: 0
+  tunerMissCount: 0,
+  tunerTargetIndex: -1,
+  vocalRunning: false,
+  vocalStarting: false,
+  vocalRequestToken: 0,
+  vocalStream: null,
+  vocalSource: null,
+  vocalAnalyser: null,
+  vocalTimerId: null,
+  vocalBuffer: null,
+  vocalPitchHistory: [],
+  vocalMissCount: 0,
+  vocalTargetMidi: null,
+  vocalFixedPitchClass: 0,
+  vocalScoreTotal: 0,
+  vocalScoreSamples: 0,
+  vocalHoldStart: 0,
+  vocalRecentCents: [],
+  vocalTrace: [],
+  vocalToneNodes: [],
+  mediaRecorder: null,
+  recordingStream: null,
+  recordingChunks: [],
+  recordingStartedAt: 0,
+  recordingSegmentStartedAt: 0,
+  recordingActiveMs: 0,
+  recordingTimerId: null,
+  recordingLevelFrame: null,
+  recordingAnalyser: null,
+  recordingSource: null,
+  recordingLevelBuffer: null,
+  recordings: [],
+  recordingObjectUrls: [],
+  recordingDbPromise: null
 };
 
 const NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const RECORDING_DB_NAME = "hoonMusicRecordingsDB";
+const RECORDING_STORE_NAME = "recordings";
+const MAX_RECORDING_MS = 30 * 60 * 1000;
 const FLAT_TO_SHARP = { Eb: "D#", Ab: "G#", Bb: "A#" };
 const DISPLAY_FLATS = new Set(["Eb", "Ab", "Bb"]);
 const TUNING_PRESETS = {
   guitarStandard: [
-    { midi: 40, label: "6번 줄 E2" },
-    { midi: 45, label: "5번 줄 A2" },
-    { midi: 50, label: "4번 줄 D3" },
-    { midi: 55, label: "3번 줄 G3" },
-    { midi: 59, label: "2번 줄 B3" },
-    { midi: 64, label: "1번 줄 E4" }
+    { midi: 40, label: "6번 줄 E2", shortLabel: "6번 E2" },
+    { midi: 45, label: "5번 줄 A2", shortLabel: "5번 A2" },
+    { midi: 50, label: "4번 줄 D3", shortLabel: "4번 D3" },
+    { midi: 55, label: "3번 줄 G3", shortLabel: "3번 G3" },
+    { midi: 59, label: "2번 줄 B3", shortLabel: "2번 B3" },
+    { midi: 64, label: "1번 줄 E4", shortLabel: "1번 E4" }
   ],
   guitarDropD: [
-    { midi: 38, label: "6번 줄 D2" },
-    { midi: 45, label: "5번 줄 A2" },
-    { midi: 50, label: "4번 줄 D3" },
-    { midi: 55, label: "3번 줄 G3" },
-    { midi: 59, label: "2번 줄 B3" },
-    { midi: 64, label: "1번 줄 E4" }
+    { midi: 38, label: "6번 줄 D2", shortLabel: "6번 D2" },
+    { midi: 45, label: "5번 줄 A2", shortLabel: "5번 A2" },
+    { midi: 50, label: "4번 줄 D3", shortLabel: "4번 D3" },
+    { midi: 55, label: "3번 줄 G3", shortLabel: "3번 G3" },
+    { midi: 59, label: "2번 줄 B3", shortLabel: "2번 B3" },
+    { midi: 64, label: "1번 줄 E4", shortLabel: "1번 E4" }
+  ],
+  guitarHalfStepDown: [
+    { midi: 39, label: "6번 줄 D#2/Eb2", shortLabel: "6번 Eb2" },
+    { midi: 44, label: "5번 줄 G#2/Ab2", shortLabel: "5번 Ab2" },
+    { midi: 49, label: "4번 줄 C#3/Db3", shortLabel: "4번 Db3" },
+    { midi: 54, label: "3번 줄 F#3/Gb3", shortLabel: "3번 Gb3" },
+    { midi: 58, label: "2번 줄 A#3/Bb3", shortLabel: "2번 Bb3" },
+    { midi: 63, label: "1번 줄 D#4/Eb4", shortLabel: "1번 Eb4" }
+  ],
+  guitarWholeStepDown: [
+    { midi: 38, label: "6번 줄 D2", shortLabel: "6번 D2" },
+    { midi: 43, label: "5번 줄 G2", shortLabel: "5번 G2" },
+    { midi: 48, label: "4번 줄 C3", shortLabel: "4번 C3" },
+    { midi: 53, label: "3번 줄 F3", shortLabel: "3번 F3" },
+    { midi: 57, label: "2번 줄 A3", shortLabel: "2번 A3" },
+    { midi: 62, label: "1번 줄 D4", shortLabel: "1번 D4" }
+  ],
+  ukuleleStandard: [
+    { midi: 67, label: "4번 줄 G4 (High G)", shortLabel: "4번 G4" },
+    { midi: 60, label: "3번 줄 C4", shortLabel: "3번 C4" },
+    { midi: 64, label: "2번 줄 E4", shortLabel: "2번 E4" },
+    { midi: 69, label: "1번 줄 A4", shortLabel: "1번 A4" }
+  ],
+  ukuleleLowG: [
+    { midi: 55, label: "4번 줄 G3 (Low G)", shortLabel: "4번 G3" },
+    { midi: 60, label: "3번 줄 C4", shortLabel: "3번 C4" },
+    { midi: 64, label: "2번 줄 E4", shortLabel: "2번 E4" },
+    { midi: 69, label: "1번 줄 A4", shortLabel: "1번 A4" }
   ]
 };
 
-const moodProgressions = {
-  bright: [
-    [1, 5, 6, 4],
-    [1, 4, 5, 1],
-    [1, 6, 4, 5]
-  ],
-  emotional: [
-    [6, 4, 1, 5],
-    [1, 3, 6, 4],
-    [6, 5, 4, 5]
-  ],
-  powerful: [
-    [1, 5, 4, 5],
-    [1, 4, 6, 5],
-    [6, 4, 5, 1]
-  ],
-  dreamy: [
-    [1, 3, 4, 4],
-    [6, 2, 4, 5],
-    [1, 6, 2, 5]
-  ]
+const VOCAL_SCALE_INTERVALS = {
+  major: [0, 2, 4, 5, 7, 9, 11],
+  minor: [0, 2, 3, 5, 7, 8, 10],
+  majorPentatonic: [0, 2, 4, 7, 9],
+  minorPentatonic: [0, 3, 5, 7, 10],
+  chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 };
 
-const romanNumerals = { 1: "I", 2: "ii", 3: "iii", 4: "IV", 5: "V", 6: "vi", 7: "vii°" };
-const majorScaleSemitones = [0, 2, 4, 5, 7, 9, 11];
-const chordQualities = ["", "m", "m", "", "", "m", "dim"];
-const triadIntervals = {
+const VOCAL_SCALE_LABELS = {
+  major: "메이저",
+  minor: "내추럴 마이너",
+  majorPentatonic: "메이저 펜타토닉",
+  minorPentatonic: "마이너 펜타토닉",
+  chromatic: "크로매틱"
+};
+
+const VOCAL_RANGES = {
+  all: { min: 65, max: 1200 },
+  low: { min: 65, max: 392 },
+  middle: { min: 87, max: 698 },
+  high: { min: 130, max: 1200 }
+};
+
+const SCALE_DATA = {
+  major: {
+    semitones: [0, 2, 4, 5, 7, 9, 11],
+    triads: ["", "m", "m", "", "", "m", "dim"],
+    sevenths: ["maj7", "m7", "m7", "maj7", "7", "m7", "m7b5"],
+    roman: ["I", "ii", "iii", "IV", "V", "vi", "vii°"]
+  },
+  minor: {
+    semitones: [0, 2, 3, 5, 7, 8, 10],
+    triads: ["m", "dim", "", "m", "", "", ""],
+    sevenths: ["m7", "m7b5", "maj7", "m7", "7", "maj7", "7"],
+    roman: ["i", "ii°", "III", "iv", "V", "VI", "VII"]
+  }
+};
+
+const CHORD_INTERVALS = {
   "": [0, 4, 7],
   m: [0, 3, 7],
-  dim: [0, 3, 6]
+  dim: [0, 3, 6],
+  aug: [0, 4, 8],
+  "7": [0, 4, 7, 10],
+  maj7: [0, 4, 7, 11],
+  m7: [0, 3, 7, 10],
+  mMaj7: [0, 3, 7, 11],
+  m7b5: [0, 3, 6, 10],
+  sus2: [0, 2, 7],
+  sus4: [0, 5, 7],
+  add9: [0, 4, 7, 14],
+  madd9: [0, 3, 7, 14],
+  "6": [0, 4, 7, 9],
+  m6: [0, 3, 7, 9]
 };
+
+const COLOR_QUALITIES = {
+  major: [
+    ["add9", "maj7", "6"],
+    ["m7", "madd9"],
+    ["m7"],
+    ["maj7", "add9"],
+    ["7", "sus4", "sus2"],
+    ["m7", "madd9"],
+    ["m7b5"]
+  ],
+  minor: [
+    ["m7", "madd9", "m6"],
+    ["m7b5"],
+    ["maj7", "add9"],
+    ["m7", "madd9"],
+    ["7", "sus4"],
+    ["maj7", "add9"],
+    ["7", "sus2"]
+  ]
+};
+
+const PROGRESSION_LIBRARY = {
+  major: {
+    pop: [
+      { degrees: [1, 5, 6, 4], moods: ["bright", "emotional"] },
+      { degrees: [1, 6, 4, 5], moods: ["bright"] },
+      { degrees: [6, 4, 1, 5], moods: ["emotional", "powerful"] },
+      { degrees: [1, 3, 4, 5], moods: ["dreamy", "emotional"] },
+      { degrees: [1, 5, 6, 4, 1, 5, 4, 4], moods: ["bright"] },
+      { degrees: [6, 4, 1, 5, 6, 4, 5, 5], moods: ["emotional"] }
+    ],
+    ballad: [
+      { degrees: [1, 3, 4, 5], moods: ["emotional", "dreamy"] },
+      { degrees: [6, 4, 1, 5], moods: ["emotional"] },
+      { degrees: [1, 6, 2, 5], moods: ["bright", "emotional"] },
+      { degrees: [1, 5, 6, 3, 4, 1, 2, 5], moods: ["emotional"] },
+      { degrees: [6, 3, 4, 1, 2, 5, 1, 5], moods: ["dreamy"] }
+    ],
+    rock: [
+      { degrees: [1, 4, 5, 4], moods: ["powerful"] },
+      { degrees: [1, 5, 4, 1], moods: ["powerful", "bright"] },
+      { degrees: [6, 4, 1, 5], moods: ["powerful", "emotional"] },
+      { degrees: [1, 4, 1, 5, 1, 4, 6, 5], moods: ["powerful"] },
+      { degrees: [6, 4, 1, 5, 6, 4, 5, 5], moods: ["tense"] }
+    ],
+    indie: [
+      { degrees: [1, 3, 6, 4], moods: ["dreamy", "emotional"] },
+      { degrees: [1, 2, 4, 5], moods: ["bright", "dreamy"] },
+      { degrees: [4, 1, 5, 6], moods: ["dreamy"] },
+      { degrees: [1, 3, 6, 4, 1, 3, 2, 5], moods: ["dreamy"] },
+      { degrees: [4, 1, 5, 6, 4, 1, 2, 5], moods: ["emotional"] }
+    ],
+    rnb: [
+      { degrees: [2, 5, 1, 6], moods: ["emotional", "dreamy"] },
+      { degrees: [1, 6, 2, 5], moods: ["emotional"] },
+      { degrees: [4, 3, 2, 5], moods: ["dreamy", "tense"] },
+      { degrees: [2, 5, 1, 6, 2, 5, 3, 6], moods: ["emotional"] },
+      { degrees: [4, 3, 2, 5, 1, 6, 2, 5], moods: ["dreamy"] }
+    ],
+    jazz: [
+      { degrees: [2, 5, 1, 6], moods: ["bright", "emotional"] },
+      { degrees: [3, 6, 2, 5], moods: ["tense", "dreamy"] },
+      { degrees: [1, 6, 2, 5], moods: ["bright"] },
+      { degrees: [1, 6, 2, 5, 3, 6, 2, 5], moods: ["bright"] },
+      { degrees: [3, 6, 2, 5, 1, 4, 2, 5], moods: ["tense"] }
+    ]
+  },
+  minor: {
+    pop: [
+      { degrees: [1, 6, 3, 7], moods: ["emotional", "dreamy"] },
+      { degrees: [1, 7, 6, 7], moods: ["powerful", "tense"] },
+      { degrees: [6, 7, 1, 5], moods: ["emotional", "powerful"] },
+      { degrees: [1, 6, 3, 7, 1, 6, 7, 7], moods: ["emotional"] },
+      { degrees: [1, 7, 6, 7, 1, 7, 5, 5], moods: ["tense"] }
+    ],
+    ballad: [
+      { degrees: [1, 6, 3, 7], moods: ["emotional", "dreamy"] },
+      { degrees: [1, 4, 6, 5], moods: ["emotional"] },
+      { degrees: [6, 7, 1, 5], moods: ["emotional", "tense"] },
+      { degrees: [1, 6, 3, 7, 4, 6, 5, 5], moods: ["emotional"] },
+      { degrees: [6, 3, 7, 1, 4, 6, 5, 5], moods: ["dreamy"] }
+    ],
+    rock: [
+      { degrees: [1, 7, 6, 7], moods: ["powerful", "tense"] },
+      { degrees: [1, 6, 7, 1], moods: ["powerful"] },
+      { degrees: [1, 5, 6, 7], moods: ["powerful", "tense"] },
+      { degrees: [1, 7, 6, 7, 1, 5, 6, 7], moods: ["powerful"] },
+      { degrees: [1, 6, 7, 1, 6, 7, 5, 5], moods: ["tense"] }
+    ],
+    indie: [
+      { degrees: [1, 3, 7, 6], moods: ["dreamy", "emotional"] },
+      { degrees: [1, 4, 7, 3], moods: ["dreamy"] },
+      { degrees: [6, 3, 7, 1], moods: ["emotional"] },
+      { degrees: [1, 3, 7, 6, 1, 4, 7, 3], moods: ["dreamy"] },
+      { degrees: [6, 3, 7, 1, 4, 6, 5, 5], moods: ["emotional"] }
+    ],
+    rnb: [
+      { degrees: [1, 4, 7, 3], moods: ["dreamy", "emotional"] },
+      { degrees: [6, 7, 1, 5], moods: ["emotional", "tense"] },
+      { degrees: [4, 5, 1, 6], moods: ["emotional"] },
+      { degrees: [1, 4, 7, 3, 6, 7, 1, 5], moods: ["dreamy"] },
+      { degrees: [4, 5, 1, 6, 2, 5, 1, 1], moods: ["emotional"] }
+    ],
+    jazz: [
+      { degrees: [2, 5, 1, 6], moods: ["tense", "emotional"] },
+      { degrees: [1, 6, 2, 5], moods: ["dreamy"] },
+      { degrees: [4, 7, 3, 6], moods: ["tense"] },
+      { degrees: [2, 5, 1, 6, 2, 5, 1, 1], moods: ["emotional"] },
+      { degrees: [4, 7, 3, 6, 2, 5, 1, 5], moods: ["tense"] }
+    ]
+  }
+};
+
+const GENRE_LABELS = { pop: "팝", ballad: "발라드", rock: "록", indie: "인디", rnb: "R&B", jazz: "재즈" };
+const MOOD_LABELS = { bright: "밝고 편안함", emotional: "감성적", powerful: "강하고 시원함", dreamy: "몽환적", tense: "긴장감" };
+const MODE_LABELS = { major: "메이저", minor: "마이너" };
+const COMPLEXITY_LABELS = { basic: "기본 3화음", colorful: "감성 확장", seventh: "7th 중심" };
+const HARMONIC_ROLES = {
+  major: { tonic: [1, 3, 6], predominant: [2, 4, 6], dominant: [5, 7] },
+  minor: { tonic: [1, 3, 6], predominant: [2, 4, 6], dominant: [5, 7] }
+};
+
 
 function ensureAudioContext() {
   if (!state.audioContext) {
@@ -215,6 +433,12 @@ function normalizeRoot(key) {
   return FLAT_TO_SHARP[key] || key;
 }
 
+function prefersFlats(key, mode = null) {
+  if (/b/.test(key) || key === "F") return true;
+  if (mode === "minor") return ["D", "G", "C"].includes(key);
+  return false;
+}
+
 function noteAt(root, semitones, preferFlats = false) {
   const rootIndex = NOTE_NAMES_SHARP.indexOf(normalizeRoot(root));
   const sharpName = NOTE_NAMES_SHARP[(rootIndex + semitones + 120) % 12];
@@ -223,50 +447,189 @@ function noteAt(root, semitones, preferFlats = false) {
   return flatMap[sharpName] || sharpName;
 }
 
-function chordFromDegree(key, degree) {
-  const degreeIndex = degree - 1;
-  const preferFlats = DISPLAY_FLATS.has(key);
-  const root = noteAt(key, majorScaleSemitones[degreeIndex], preferFlats);
-  const quality = chordQualities[degreeIndex];
+function randomItem(items) {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+function getGeneratorSettings() {
+  return {
+    key: $("#keySelect").value,
+    mode: $("#modeSelect").value,
+    genre: $("#genreSelect").value,
+    mood: $("#moodSelect").value,
+    length: Number($("#progressionLength").value),
+    complexity: $("#complexitySelect").value
+  };
+}
+
+function qualityForDegree(mode, degree, complexity, randomizeColor = true) {
+  const scale = SCALE_DATA[mode];
+  if (complexity === "seventh") return scale.sevenths[degree - 1];
+  if (complexity === "colorful") {
+    const candidates = COLOR_QUALITIES[mode][degree - 1];
+    return randomizeColor ? randomItem(candidates) : candidates[0];
+  }
+  return scale.triads[degree - 1];
+}
+
+function buildChord(key, mode, degree, complexity, randomizeColor = true) {
+  const scale = SCALE_DATA[mode];
+  const root = noteAt(key, scale.semitones[degree - 1], prefersFlats(key, mode));
+  const quality = qualityForDegree(mode, degree, complexity, randomizeColor);
   return {
     degree,
-    symbol: `${root}${quality}`,
     root,
     quality,
-    roman: romanNumerals[degree]
+    symbol: `${root}${quality}`,
+    roman: scale.roman[degree - 1]
   };
+}
+
+function chooseProgressionDegrees() {
+  const { mode, genre, mood, length } = getGeneratorSettings();
+  const all = PROGRESSION_LIBRARY[mode][genre];
+  const correctLength = all.filter((item) => item.degrees.length === length);
+  const moodMatches = correctLength.filter((item) => item.moods.includes(mood));
+  return [...randomItem(moodMatches.length ? moodMatches : correctLength).degrees];
+}
+
+function rebuildProgressionFromDegrees(randomizeColor = true) {
+  const { key, mode, complexity } = getGeneratorSettings();
+  state.progression = state.progressionDegrees.map((degree) => buildChord(key, mode, degree, complexity, randomizeColor));
+  state.roman = state.progression.map((chord) => chord.roman);
+  state.selectedChordIndex = clamp(state.selectedChordIndex, 0, Math.max(0, state.progression.length - 1));
+  renderProgression();
+  updateGeneratorSummary();
+  saveChordSettings();
 }
 
 function generateProgression() {
   stopProgression();
-  const key = $("#keySelect").value;
-  const mood = $("#moodSelect").value;
-  const candidates = moodProgressions[mood] || moodProgressions.bright;
-  const selected = candidates[Math.floor(Math.random() * candidates.length)];
-  state.progression = selected.map((degree) => chordFromDegree(key, degree));
-  state.roman = selected.map((degree) => romanNumerals[degree]);
-  renderProgression();
-  saveChordSettings();
+  state.progressionDegrees = chooseProgressionDegrees();
+  state.selectedChordIndex = 0;
+  rebuildProgressionFromDegrees(true);
+  $("#copyStatus").textContent = "";
+}
+
+function updateGeneratorSummary() {
+  const { key, mode, genre, mood, complexity } = getGeneratorSettings();
+  $("#generatorSummary").textContent = `${key} ${MODE_LABELS[mode]} · ${GENRE_LABELS[genre]} · ${MOOD_LABELS[mood]} · ${COMPLEXITY_LABELS[complexity]}`;
+}
+
+function getChordNotes(chord) {
+  const intervals = CHORD_INTERVALS[chord.quality] || CHORD_INTERVALS[""];
+  const flat = prefersFlats(chord.root);
+  return intervals.map((interval) => noteAt(chord.root, interval, flat));
+}
+
+function getHarmonicRole(mode, degree) {
+  const entries = Object.entries(HARMONIC_ROLES[mode]);
+  const found = entries.find(([, degrees]) => degrees.includes(degree));
+  return found ? found[0] : "tonic";
+}
+
+function harmonicRoleLabel(role) {
+  return { tonic: "안정감을 만드는 토닉 계열", predominant: "진행을 움직이는 서브도미넌트 계열", dominant: "긴장과 해결을 만드는 도미넌트 계열" }[role];
 }
 
 function renderProgression() {
   $("#romanProgression").textContent = state.roman.join(" – ");
   const container = $("#chordCards");
   container.innerHTML = "";
+
   state.progression.forEach((chord, index) => {
-    const card = document.createElement("div");
+    const card = document.createElement("article");
     card.className = "chord-card";
     card.dataset.index = String(index);
+    card.classList.toggle("is-selected", index === state.selectedChordIndex);
     const notes = getChordNotes(chord).join(" · ");
-    card.innerHTML = `<strong>${chord.symbol}</strong><span title="${notes}">${notes}</span>`;
+    card.innerHTML = `
+      <button class="chord-select-area" type="button" aria-label="${chord.symbol} 코드 선택">
+        <small>${index + 1}</small>
+        <strong>${chord.symbol}</strong>
+        <span>${notes}</span>
+      </button>
+      <div class="chord-card-actions">
+        <button class="chord-mini-btn play-one" type="button" aria-label="${chord.symbol} 코드 듣기">▶</button>
+        <button class="chord-mini-btn replace-one" type="button" aria-label="${chord.symbol} 코드 바꾸기">↻</button>
+      </div>`;
+
+    card.querySelector(".chord-select-area").addEventListener("click", () => selectChord(index));
+    card.querySelector(".play-one").addEventListener("click", (event) => {
+      event.stopPropagation();
+      selectChord(index);
+      playSingleChord(chord);
+    });
+    card.querySelector(".replace-one").addEventListener("click", (event) => {
+      event.stopPropagation();
+      replaceChordAt(index);
+    });
     container.appendChild(card);
   });
+  renderSelectedChord();
 }
 
-function getChordNotes(chord) {
-  const intervals = triadIntervals[chord.quality] || triadIntervals[""];
-  const preferFlats = /b/.test(chord.root);
-  return intervals.map((interval) => noteAt(chord.root, interval, preferFlats));
+function selectChord(index) {
+  state.selectedChordIndex = clamp(index, 0, state.progression.length - 1);
+  $$(".chord-card").forEach((card, cardIndex) => card.classList.toggle("is-selected", cardIndex === state.selectedChordIndex));
+  renderSelectedChord();
+}
+
+function replaceChordAt(index) {
+  stopProgression();
+  const { mode, key, complexity } = getGeneratorSettings();
+  const currentDegree = state.progressionDegrees[index];
+  const role = getHarmonicRole(mode, currentDegree);
+  const alternatives = HARMONIC_ROLES[mode][role].filter((degree) => degree !== currentDegree);
+  const nextDegree = alternatives.length ? randomItem(alternatives) : currentDegree;
+  state.progressionDegrees[index] = nextDegree;
+  state.progression[index] = buildChord(key, mode, nextDegree, complexity, true);
+  state.roman[index] = state.progression[index].roman;
+  state.selectedChordIndex = index;
+  renderProgression();
+  saveChordSettings();
+}
+
+function renderSelectedChord() {
+  const chord = state.progression[state.selectedChordIndex];
+  if (!chord) return;
+  const notes = getChordNotes(chord);
+  const role = getHarmonicRole($("#modeSelect").value, chord.degree);
+  $("#selectedChordName").textContent = chord.symbol;
+  $("#selectedChordInfo").textContent = `구성음 ${notes.join(" · ")} · ${harmonicRoleLabel(role)}`;
+  renderPianoKeyboard(chord);
+}
+
+function renderPianoKeyboard(chord) {
+  const container = $("#pianoKeyboard");
+  const chordNotes = getChordNotes(chord).map(normalizeRoot);
+  const root = normalizeRoot(chord.root);
+  const whiteNotes = ["C", "D", "E", "F", "G", "A", "B"];
+  const blackNotes = [
+    { note: "C#", left: 10.8 },
+    { note: "D#", left: 25.1 },
+    { note: "F#", left: 53.7 },
+    { note: "G#", left: 68.0 },
+    { note: "A#", left: 82.3 }
+  ];
+  container.innerHTML = "";
+  whiteNotes.forEach((note) => {
+    const key = document.createElement("span");
+    key.className = "piano-key white-key";
+    key.classList.toggle("is-active", chordNotes.includes(note));
+    key.classList.toggle("is-root", root === note);
+    key.textContent = note;
+    container.appendChild(key);
+  });
+  blackNotes.forEach(({ note, left }) => {
+    const key = document.createElement("span");
+    key.className = "piano-key black-key";
+    key.style.left = `${left}%`;
+    key.classList.toggle("is-active", chordNotes.includes(note));
+    key.classList.toggle("is-root", root === note);
+    key.textContent = note;
+    container.appendChild(key);
+  });
 }
 
 function noteFrequency(noteName, octave = 4) {
@@ -276,28 +639,84 @@ function noteFrequency(noteName, octave = 4) {
   return 440 * Math.pow(2, (midi - 69) / 12);
 }
 
-function playChord(chord, startTime, duration = 1.2) {
-  const audio = ensureAudioContext();
-  const master = audio.createGain();
-  const notes = getChordNotes(chord);
-  master.gain.setValueAtTime(0.0001, startTime);
-  master.gain.exponentialRampToValueAtTime(0.22, startTime + 0.03);
-  master.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-  master.connect(audio.destination);
+function oscillatorEnvelope(preset, gain, startTime, duration) {
+  gain.gain.cancelScheduledValues(startTime);
+  gain.gain.setValueAtTime(0.0001, startTime);
+  if (preset === "pad") {
+    gain.gain.linearRampToValueAtTime(0.13, startTime + Math.min(0.35, duration * 0.25));
+    gain.gain.setValueAtTime(0.11, Math.max(startTime + 0.36, startTime + duration * 0.68));
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+  } else if (preset === "pluck") {
+    gain.gain.exponentialRampToValueAtTime(0.2, startTime + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + Math.min(duration, 0.7));
+  } else {
+    gain.gain.exponentialRampToValueAtTime(0.18, startTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.055, startTime + Math.min(0.3, duration * 0.35));
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+  }
+}
 
-  notes.forEach((note, index) => {
-    const oscillator = audio.createOscillator();
-    const partialGain = audio.createGain();
-    oscillator.type = index === 0 ? "triangle" : "sine";
-    oscillator.frequency.value = noteFrequency(note, index === 0 ? 3 : 4);
-    partialGain.gain.value = index === 0 ? 0.65 : 0.45;
-    oscillator.connect(partialGain).connect(master);
-    oscillator.start(startTime);
-    oscillator.stop(startTime + duration + 0.05);
-    state.chordOscillators.push(oscillator);
-    oscillator.addEventListener("ended", () => {
-      state.chordOscillators = state.chordOscillators.filter((item) => item !== oscillator);
-    }, { once: true });
+function playTone(note, octave, startTime, duration, preset, level = 1) {
+  const audio = ensureAudioContext();
+  const oscillator = audio.createOscillator();
+  const gain = audio.createGain();
+  oscillator.type = preset === "pad" ? "sine" : preset === "pluck" ? "triangle" : "triangle";
+  oscillator.frequency.setValueAtTime(noteFrequency(note, octave), startTime);
+  oscillator.detune.value = preset === "pad" ? -3 : 0;
+  oscillatorEnvelope(preset, gain, startTime, duration);
+  gain.gain.setValueAtTime(0.0001, startTime);
+  gain.connect(audio.destination);
+  oscillator.connect(gain);
+  const scaledGain = audio.createGain();
+  scaledGain.gain.value = level;
+  gain.disconnect();
+  gain.connect(scaledGain).connect(audio.destination);
+  oscillator.start(startTime);
+  oscillator.stop(startTime + duration + 0.08);
+  state.chordOscillators.push(oscillator);
+  oscillator.addEventListener("ended", () => {
+    state.chordOscillators = state.chordOscillators.filter((item) => item !== oscillator);
+  }, { once: true });
+}
+
+function chordTransitionOverlap(slotDuration, preset) {
+  if (preset === "pluck") return 0;
+  if (preset === "pad") return Math.min(0.2, slotDuration * 0.08);
+  return Math.min(0.12, slotDuration * 0.05);
+}
+
+function playChord(chord, startTime, slotDuration = 1.2, style = "block", preset = "soft") {
+  const notes = getChordNotes(chord);
+  const noteEvents = [];
+  const overlap = chordTransitionOverlap(slotDuration, preset);
+
+  if (style === "arpeggio") {
+    notes.forEach((note, index) => {
+      const offset = index * Math.min(0.18, slotDuration / (notes.length + 2));
+      noteEvents.push({
+        note,
+        offset,
+        length: Math.max(0.35, slotDuration - offset + overlap)
+      });
+    });
+  } else if (style === "pulse") {
+    const pulseCount = Math.max(2, Math.round(slotDuration / 0.45));
+    const pulseSpacing = slotDuration / pulseCount;
+    for (let pulse = 0; pulse < pulseCount; pulse += 1) {
+      notes.forEach((note) => noteEvents.push({
+        note,
+        offset: pulse * pulseSpacing,
+        length: Math.min(0.38, pulseSpacing * 0.9)
+      }));
+    }
+  } else {
+    notes.forEach((note) => noteEvents.push({ note, offset: 0, length: slotDuration + overlap }));
+  }
+
+  noteEvents.forEach((event, index) => {
+    const noteIndex = notes.indexOf(event.note);
+    const octave = noteIndex === 0 ? 3 : 4 + Math.floor((CHORD_INTERVALS[chord.quality]?.[noteIndex] || 0) / 12);
+    playTone(event.note, octave, startTime + event.offset, event.length, preset, index === 0 ? 0.8 : 0.58);
   });
 }
 
@@ -305,37 +724,99 @@ function clearChordHighlights() {
   $$(".chord-card").forEach((card) => card.classList.remove("is-playing"));
 }
 
+function scheduleProgressionCycle(startAt) {
+  const audio = ensureAudioContext();
+  const bpm = clamp(Number($("#chordBpm").value) || 90, 40, 200);
+  const beats = Number($("#beatsPerChord").value) || 4;
+  const style = $("#playStyle").value;
+  const preset = $("#soundPreset").value;
+  const secondsPerChord = (60 / bpm) * beats;
+
+  state.progression.forEach((chord, index) => {
+    const chordStart = startAt + index * secondsPerChord;
+    // 코드 슬롯 전체를 재생하고, 부드러운 음색은 다음 코드와 짧게 겹쳐 공백을 없앤다.
+    playChord(chord, chordStart, secondsPerChord, style, preset);
+    const delay = Math.max(0, (chordStart - audio.currentTime) * 1000);
+    const timer = setTimeout(() => {
+      clearChordHighlights();
+      const card = $(`.chord-card[data-index="${index}"]`);
+      if (card) card.classList.add("is-playing");
+      selectChord(index);
+    }, delay);
+    state.chordTimers.push(timer);
+  });
+
+  const cycleDuration = state.progression.length * secondsPerChord;
+  state.chordTimers.push(setTimeout(clearChordHighlights, Math.max(0, (startAt - audio.currentTime + cycleDuration) * 1000)));
+  return cycleDuration;
+}
+
+function queueProgressionLoops() {
+  if (!state.progressionPlaying || !$("#loopProgression").checked) {
+    window.clearInterval(state.progressionLoopTimer);
+    state.progressionLoopTimer = null;
+    return;
+  }
+
+  const audio = ensureAudioContext();
+  const lookAheadSeconds = 0.75;
+  while (state.nextProgressionStart <= audio.currentTime + lookAheadSeconds) {
+    scheduleProgressionCycle(state.nextProgressionStart);
+    state.nextProgressionStart += state.progressionCycleDuration;
+  }
+}
+
 function playProgression() {
   try {
     stopProgression();
+    stopMetronome();
+    stopTuner();
     const audio = ensureAudioContext();
     const bpm = clamp(Number($("#chordBpm").value) || 90, 40, 200);
     $("#chordBpm").value = String(bpm);
-    const secondsPerChord = (60 / bpm) * 4;
-    const startAt = audio.currentTime + 0.08;
+    const firstStart = audio.currentTime + 0.08;
+    const cycleDuration = scheduleProgressionCycle(firstStart);
 
-    state.progression.forEach((chord, index) => {
-      const chordStart = startAt + index * secondsPerChord;
-      playChord(chord, chordStart, Math.min(secondsPerChord * 0.92, 2.8));
-      const delay = Math.max(0, (chordStart - audio.currentTime) * 1000);
-      const timer = setTimeout(() => {
+    state.progressionPlaying = true;
+    state.progressionCycleDuration = cycleDuration;
+    state.nextProgressionStart = firstStart + cycleDuration;
+
+    if ($("#loopProgression").checked) {
+      // 다음 반복을 경계 시점이 아니라 미리 Web Audio 시간축에 예약해 타이머 지연으로 인한 끊김을 방지한다.
+      state.progressionLoopTimer = window.setInterval(queueProgressionLoops, 50);
+      queueProgressionLoops();
+    } else {
+      const finishDelay = Math.max(0, (firstStart - audio.currentTime + cycleDuration + 0.25) * 1000);
+      state.chordTimers.push(window.setTimeout(() => {
+        state.progressionPlaying = false;
         clearChordHighlights();
-        const card = $(`.chord-card[data-index="${index}"]`);
-        if (card) card.classList.add("is-playing");
-      }, delay);
-      state.chordTimers.push(timer);
-    });
+      }, finishDelay));
+    }
+    savePlaybackSettings();
+  } catch (error) {
+    alert(error.message);
+  }
+}
 
-    state.chordTimers.push(setTimeout(clearChordHighlights, state.progression.length * secondsPerChord * 1000 + 200));
-    localStorage.setItem("hoonMusicChordBpm", String(bpm));
+function playSingleChord(chord) {
+  try {
+    stopProgression();
+    const audio = ensureAudioContext();
+    playChord(chord, audio.currentTime + 0.04, 1.8, $("#playStyle").value === "pulse" ? "block" : $("#playStyle").value, $("#soundPreset").value);
   } catch (error) {
     alert(error.message);
   }
 }
 
 function stopProgression() {
+  state.progressionPlaying = false;
+  state.nextProgressionStart = 0;
+  state.progressionCycleDuration = 0;
   state.chordTimers.forEach(clearTimeout);
   state.chordTimers = [];
+  window.clearInterval(state.progressionLoopTimer);
+  window.clearTimeout(state.progressionLoopTimer);
+  state.progressionLoopTimer = null;
   clearChordHighlights();
   state.chordOscillators.forEach((oscillator) => {
     try { oscillator.stop(); } catch {}
@@ -344,10 +825,12 @@ function stopProgression() {
 }
 
 async function copyProgression() {
-  const text = state.progression.map((chord) => chord.symbol).join(" - ");
+  const chords = state.progression.map((chord) => chord.symbol).join(" - ");
+  const roman = state.roman.join(" - ");
+  const settings = getGeneratorSettings();
+  const text = `${settings.key} ${MODE_LABELS[settings.mode]} · ${GENRE_LABELS[settings.genre]}\n${chords}\n${roman}`;
   try {
     await navigator.clipboard.writeText(text);
-    $("#copyStatus").textContent = `복사됨: ${text}`;
   } catch {
     const textarea = document.createElement("textarea");
     textarea.value = text;
@@ -355,22 +838,129 @@ async function copyProgression() {
     textarea.select();
     document.execCommand("copy");
     textarea.remove();
-    $("#copyStatus").textContent = `복사됨: ${text}`;
   }
+  $("#copyStatus").textContent = `복사됨: ${chords}`;
+}
+
+function saveCurrentProgression() {
+  const settings = getGeneratorSettings();
+  const item = {
+    id: Date.now(),
+    createdAt: new Date().toISOString(),
+    settings,
+    degrees: [...state.progressionDegrees],
+    chords: state.progression.map((chord) => ({ ...chord }))
+  };
+  state.savedProgressions.unshift(item);
+  state.savedProgressions = state.savedProgressions.slice(0, 20);
+  localStorage.setItem("hoonMusicSavedProgressions", JSON.stringify(state.savedProgressions));
+  renderSavedProgressions();
+  $("#copyStatus").textContent = "현재 코드 진행을 저장했습니다.";
+}
+
+function loadSavedProgression(id) {
+  const item = state.savedProgressions.find((saved) => saved.id === id);
+  if (!item) return;
+  stopProgression();
+  const settings = item.settings;
+  $("#keySelect").value = settings.key;
+  $("#modeSelect").value = settings.mode;
+  $("#genreSelect").value = settings.genre;
+  $("#moodSelect").value = settings.mood;
+  $("#progressionLength").value = String(settings.length);
+  $("#complexitySelect").value = settings.complexity;
+  state.progressionDegrees = [...item.degrees];
+  state.progression = item.chords.map((chord) => ({ ...chord }));
+  state.roman = state.progression.map((chord) => chord.roman);
+  state.selectedChordIndex = 0;
+  renderProgression();
+  updateGeneratorSummary();
+  saveChordSettings();
+  $("#copyStatus").textContent = "저장한 코드 진행을 불러왔습니다.";
+}
+
+function deleteSavedProgression(id) {
+  state.savedProgressions = state.savedProgressions.filter((item) => item.id !== id);
+  localStorage.setItem("hoonMusicSavedProgressions", JSON.stringify(state.savedProgressions));
+  renderSavedProgressions();
+}
+
+function renderSavedProgressions() {
+  const container = $("#savedProgressions");
+  $("#savedCount").textContent = `${state.savedProgressions.length}개`;
+  container.innerHTML = "";
+  if (!state.savedProgressions.length) {
+    container.innerHTML = '<p class="saved-empty">마음에 드는 진행을 저장하면 여기에 표시됩니다.</p>';
+    return;
+  }
+
+  state.savedProgressions.forEach((item) => {
+    const row = document.createElement("article");
+    row.className = "saved-item";
+    const chordText = item.chords.map((chord) => chord.symbol).join(" · ");
+    row.innerHTML = `
+      <button class="saved-load" type="button">
+        <strong>${item.settings.key} ${MODE_LABELS[item.settings.mode]} · ${GENRE_LABELS[item.settings.genre]}</strong>
+        <span>${chordText}</span>
+      </button>
+      <button class="saved-delete" type="button" aria-label="저장한 진행 삭제">삭제</button>`;
+    row.querySelector(".saved-load").addEventListener("click", () => loadSavedProgression(item.id));
+    row.querySelector(".saved-delete").addEventListener("click", () => deleteSavedProgression(item.id));
+    container.appendChild(row);
+  });
 }
 
 function saveChordSettings() {
-  localStorage.setItem("hoonMusicKey", $("#keySelect").value);
-  localStorage.setItem("hoonMusicMood", $("#moodSelect").value);
+  const settings = getGeneratorSettings();
+  Object.entries(settings).forEach(([key, value]) => localStorage.setItem(`hoonMusicChord_${key}`, String(value)));
+}
+
+function savePlaybackSettings() {
+  localStorage.setItem("hoonMusicChordBpm", String($("#chordBpm").value));
+  localStorage.setItem("hoonMusicBeatsPerChord", $("#beatsPerChord").value);
+  localStorage.setItem("hoonMusicPlayStyle", $("#playStyle").value);
+  localStorage.setItem("hoonMusicSoundPreset", $("#soundPreset").value);
+  localStorage.setItem("hoonMusicLoopProgression", $("#loopProgression").checked ? "1" : "0");
 }
 
 function loadSettings() {
   setBpm(localStorage.getItem("hoonMusicBpm") || 100);
-  $("#keySelect").value = localStorage.getItem("hoonMusicKey") || "C";
-  $("#moodSelect").value = localStorage.getItem("hoonMusicMood") || "bright";
+  $("#keySelect").value = localStorage.getItem("hoonMusicChord_key") || localStorage.getItem("hoonMusicKey") || "C";
+  $("#modeSelect").value = localStorage.getItem("hoonMusicChord_mode") || "major";
+  $("#genreSelect").value = localStorage.getItem("hoonMusicChord_genre") || "pop";
+  $("#moodSelect").value = localStorage.getItem("hoonMusicChord_mood") || localStorage.getItem("hoonMusicMood") || "bright";
+  $("#progressionLength").value = localStorage.getItem("hoonMusicChord_length") || "4";
+  $("#complexitySelect").value = localStorage.getItem("hoonMusicChord_complexity") || "basic";
   $("#chordBpm").value = localStorage.getItem("hoonMusicChordBpm") || "90";
-  $("#tuningMode").value = localStorage.getItem("hoonMusicTuningMode") || "chromatic";
+  $("#beatsPerChord").value = localStorage.getItem("hoonMusicBeatsPerChord") || "4";
+  $("#playStyle").value = localStorage.getItem("hoonMusicPlayStyle") || "block";
+  $("#soundPreset").value = localStorage.getItem("hoonMusicSoundPreset") || "soft";
+  $("#loopProgression").checked = localStorage.getItem("hoonMusicLoopProgression") === "1";
+  try {
+    state.savedProgressions = JSON.parse(localStorage.getItem("hoonMusicSavedProgressions") || "[]");
+    if (!Array.isArray(state.savedProgressions)) state.savedProgressions = [];
+  } catch {
+    state.savedProgressions = [];
+  }
+
+  const savedTuningMode = localStorage.getItem("hoonMusicTuningMode") || "chromatic";
+  $("#tuningMode").value = savedTuningMode;
+  const savedTargetValue = localStorage.getItem(`hoonMusicTarget_${savedTuningMode}`);
+  const savedTarget = savedTargetValue === null ? -1 : Number(savedTargetValue);
+  state.tunerTargetIndex = Number.isInteger(savedTarget) ? savedTarget : -1;
   setA4Reference(localStorage.getItem("hoonMusicA4") || 440);
+
+  $("#vocalKeySelect").value = localStorage.getItem("hoonMusicVocalKey") || "C";
+  $("#vocalScaleSelect").value = localStorage.getItem("hoonMusicVocalScale") || "major";
+  $("#vocalTargetMode").value = localStorage.getItem("hoonMusicVocalTargetMode") || "auto";
+  $("#vocalRangeSelect").value = localStorage.getItem("hoonMusicVocalRange") || "all";
+  $("#vocalTargetOctave").value = localStorage.getItem("hoonMusicVocalOctave") || "4";
+  const savedPitchClassValue = localStorage.getItem("hoonMusicVocalPitchClass");
+  const savedPitchClass = savedPitchClassValue === null ? NaN : Number(savedPitchClassValue);
+  const rootPitchClass = NOTE_NAMES_SHARP.indexOf(normalizeRoot($("#vocalKeySelect").value));
+  state.vocalFixedPitchClass = Number.isInteger(savedPitchClass) && savedPitchClass >= 0 && savedPitchClass < 12
+    ? savedPitchClass
+    : rootPitchClass;
 }
 
 
@@ -474,6 +1064,52 @@ function detectPitchYin(input, sampleRate) {
   return Number.isFinite(frequency) && frequency >= minFrequency && frequency <= maxFrequency ? frequency : null;
 }
 
+function getCurrentTuningPreset() {
+  return TUNING_PRESETS[$("#tuningMode").value] || null;
+}
+
+function renderTuningTargets() {
+  const mode = $("#tuningMode").value;
+  const preset = getCurrentTuningPreset();
+  const container = $("#stringTargetButtons");
+  const hint = $("#stringTargetHint");
+  container.innerHTML = "";
+
+  const createButton = (text, index, ariaLabel) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "string-target-btn";
+    button.textContent = text;
+    button.setAttribute("aria-label", ariaLabel);
+    button.classList.toggle("is-active", state.tunerTargetIndex === index);
+    button.addEventListener("click", () => {
+      state.tunerTargetIndex = index;
+      localStorage.setItem(`hoonMusicTarget_${mode}`, String(index));
+      state.tunerPitchHistory = [];
+      renderTuningTargets();
+      if (state.tunerRunning) {
+        const message = index < 0 ? "자동 감지 모드입니다. 악기 한 줄을 연주해 주세요." : `${preset[index].label}을 길게 연주해 주세요.`;
+        resetTunerDisplay(message);
+      }
+    });
+    container.appendChild(button);
+  };
+
+  if (!preset) {
+    state.tunerTargetIndex = -1;
+    hint.textContent = "연주한 소리에서 가장 가까운 음을 자동으로 찾습니다.";
+    createButton("자동 감지", -1, "모든 음 자동 감지");
+    return;
+  }
+
+  if (state.tunerTargetIndex >= preset.length || state.tunerTargetIndex < -1) state.tunerTargetIndex = -1;
+  hint.textContent = state.tunerTargetIndex < 0
+    ? "자동으로 가장 가까운 줄을 찾습니다."
+    : "선택한 줄만 기준으로 음정을 확인합니다.";
+  createButton("자동", -1, "가장 가까운 줄 자동 선택");
+  preset.forEach((item, index) => createButton(item.shortLabel, index, `${item.label} 선택`));
+}
+
 function nearestTunerTarget(frequency) {
   const a4 = getA4Reference();
   const midiFloat = 69 + 12 * Math.log2(frequency / a4);
@@ -488,11 +1124,16 @@ function nearestTunerTarget(frequency) {
     };
   }
 
-  const preset = TUNING_PRESETS[mode] || TUNING_PRESETS.guitarStandard;
-  const target = preset.reduce((best, item) => (
+  const preset = getCurrentTuningPreset() || TUNING_PRESETS.guitarStandard;
+  const lockedTarget = state.tunerTargetIndex >= 0 ? preset[state.tunerTargetIndex] : null;
+  const target = lockedTarget || preset.reduce((best, item) => (
     Math.abs(item.midi - midiFloat) < Math.abs(best.midi - midiFloat) ? item : best
   ));
-  return { ...target, name: midiNoteName(target.midi) };
+  return {
+    ...target,
+    label: lockedTarget ? `${target.label} · 고정` : target.label,
+    name: midiNoteName(target.midi)
+  };
 }
 
 function setTunerBadge(text, mode = "idle") {
@@ -537,11 +1178,11 @@ function updateTunerDisplay(frequency) {
     $("#tunerMessage").textContent = cents < 0 ? "조금 낮습니다. 아주 조금 올려 주세요." : "조금 높습니다. 아주 조금 내려 주세요.";
     setTunerBadge("거의 맞음", "listening");
   } else if (absoluteCents > 180 && $("#tuningMode").value !== "chromatic") {
-    $("#tunerMessage").textContent = "선택한 기타 줄과 음정 차이가 큽니다. 다른 줄인지 확인해 주세요.";
+    $("#tunerMessage").textContent = "선택한 줄과 음정 차이가 큽니다. 다른 줄인지 확인해 주세요.";
     setTunerBadge(cents < 0 ? "낮음" : "높음", "listening");
   } else {
-    const isGuitarMode = $("#tuningMode").value !== "chromatic";
-    if (isGuitarMode) {
+    const isStringInstrumentMode = $("#tuningMode").value !== "chromatic";
+    if (isStringInstrumentMode) {
       $("#tunerMessage").textContent = cents < 0 ? "음정이 낮습니다. 줄을 조금 조여 주세요." : "음정이 높습니다. 줄을 조금 풀어 주세요.";
     } else {
       $("#tunerMessage").textContent = cents < 0 ? "음정이 낮습니다. 소리를 조금 올려 주세요." : "음정이 높습니다. 소리를 조금 내려 주세요.";
@@ -596,6 +1237,7 @@ async function startTuner() {
 
     stopMetronome();
     stopProgression();
+    stopVocalTune(false);
     setTunerBadge("권한 확인 중", "listening");
     $("#tunerMessage").textContent = "마이크 사용 권한을 확인하고 있습니다.";
 
@@ -672,13 +1314,905 @@ function toggleTuner() {
   else startTuner();
 }
 
+
+function getVocalSettings() {
+  return {
+    key: $("#vocalKeySelect").value,
+    scale: $("#vocalScaleSelect").value,
+    targetMode: $("#vocalTargetMode").value,
+    range: $("#vocalRangeSelect").value,
+    octave: Number($("#vocalTargetOctave").value) || 4
+  };
+}
+
+function saveVocalSettings() {
+  const settings = getVocalSettings();
+  localStorage.setItem("hoonMusicVocalKey", settings.key);
+  localStorage.setItem("hoonMusicVocalScale", settings.scale);
+  localStorage.setItem("hoonMusicVocalTargetMode", settings.targetMode);
+  localStorage.setItem("hoonMusicVocalRange", settings.range);
+  localStorage.setItem("hoonMusicVocalOctave", String(settings.octave));
+  localStorage.setItem("hoonMusicVocalPitchClass", String(state.vocalFixedPitchClass));
+}
+
+function vocalScalePitchClasses() {
+  const settings = getVocalSettings();
+  const root = NOTE_NAMES_SHARP.indexOf(normalizeRoot(settings.key));
+  const intervals = VOCAL_SCALE_INTERVALS[settings.scale] || VOCAL_SCALE_INTERVALS.major;
+  return intervals.map((interval) => (root + interval) % 12);
+}
+
+function displayMidiName(midi, key = "C") {
+  const rounded = Math.round(midi);
+  const pitchClass = ((rounded % 12) + 12) % 12;
+  const note = noteAt("C", pitchClass, prefersFlats(key));
+  const octave = Math.floor(rounded / 12) - 1;
+  return `${note}${octave}`;
+}
+
+function ensureValidVocalFixedPitch() {
+  const allowed = vocalScalePitchClasses();
+  if (!allowed.includes(state.vocalFixedPitchClass)) state.vocalFixedPitchClass = allowed[0];
+}
+
+function renderVocalScaleNotes() {
+  ensureValidVocalFixedPitch();
+  const settings = getVocalSettings();
+  const container = $("#vocalScaleNotes");
+  container.innerHTML = "";
+  vocalScalePitchClasses().forEach((pitchClass) => {
+    const chip = document.createElement("span");
+    chip.className = "vocal-note-chip";
+    chip.textContent = noteAt("C", pitchClass, prefersFlats(settings.key));
+    container.appendChild(chip);
+  });
+  renderVocalTargetButtons();
+  $("#vocalFixedTargetPanel").hidden = settings.targetMode !== "fixed";
+  saveVocalSettings();
+}
+
+function renderVocalTargetButtons() {
+  const settings = getVocalSettings();
+  const container = $("#vocalTargetButtons");
+  container.innerHTML = "";
+  vocalScalePitchClasses().forEach((pitchClass) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "vocal-target-btn";
+    button.classList.toggle("is-active", pitchClass === state.vocalFixedPitchClass);
+    button.textContent = noteAt("C", pitchClass, prefersFlats(settings.key));
+    button.addEventListener("click", () => {
+      state.vocalFixedPitchClass = pitchClass;
+      state.vocalTargetMidi = fixedVocalTargetMidi();
+      resetVocalPracticeStats(false);
+      renderVocalTargetButtons();
+      saveVocalSettings();
+      updateVocalIdleTarget();
+    });
+    container.appendChild(button);
+  });
+}
+
+function setVocalBadge(text, mode = "") {
+  const badge = $("#vocalStatusBadge");
+  badge.textContent = text;
+  badge.classList.remove("is-listening", "is-close", "is-error");
+  if (mode) badge.classList.add(`is-${mode}`);
+}
+
+function fixedVocalTargetMidi() {
+  const octave = Number($("#vocalTargetOctave").value) || 4;
+  return 12 * (octave + 1) + state.vocalFixedPitchClass;
+}
+
+function autoVocalTargetMidi(frequency) {
+  const midiFloat = 69 + 12 * Math.log2(frequency / getA4Reference());
+  const allowed = new Set(vocalScalePitchClasses());
+  let bestMidi = Math.round(midiFloat);
+  let bestDistance = Infinity;
+  const center = Math.round(midiFloat);
+  for (let midi = center - 12; midi <= center + 12; midi += 1) {
+    if (!allowed.has(((midi % 12) + 12) % 12)) continue;
+    const distance = Math.abs(midiFloat - midi);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestMidi = midi;
+    }
+  }
+  return bestMidi;
+}
+
+function getVocalTargetMidi(frequency = null) {
+  if ($("#vocalTargetMode").value === "fixed") return fixedVocalTargetMidi();
+  if (frequency) return autoVocalTargetMidi(frequency);
+  if (Number.isFinite(state.vocalTargetMidi)) return state.vocalTargetMidi;
+  const settings = getVocalSettings();
+  const rootPitchClass = NOTE_NAMES_SHARP.indexOf(normalizeRoot(settings.key));
+  return 12 * (4 + 1) + rootPitchClass;
+}
+
+function standardDeviation(values) {
+  if (values.length < 2) return 0;
+  const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance = values.reduce((sum, value) => sum + ((value - average) ** 2), 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+function renderVocalTrace() {
+  const container = $("#vocalPitchTrace");
+  container.innerHTML = "";
+  if (!state.vocalTrace.length) {
+    const empty = document.createElement("span");
+    empty.className = "vocal-trace-empty";
+    empty.textContent = "보컬튠을 시작하면 음정 움직임이 표시됩니다.";
+    container.appendChild(empty);
+    return;
+  }
+  state.vocalTrace.forEach((cents) => {
+    const point = document.createElement("span");
+    point.className = "vocal-trace-point";
+    point.classList.toggle("is-in-tune", Math.abs(cents) <= 8);
+    point.style.setProperty("--trace-position", String(clamp(cents, -50, 50)));
+    container.appendChild(point);
+  });
+}
+
+function resetVocalPracticeStats(clearTarget = true) {
+  state.vocalScoreTotal = 0;
+  state.vocalScoreSamples = 0;
+  state.vocalHoldStart = 0;
+  state.vocalRecentCents = [];
+  state.vocalTrace = [];
+  if (clearTarget && $("#vocalTargetMode").value === "auto") state.vocalTargetMidi = null;
+  $("#vocalScore").textContent = "--";
+  $("#vocalHoldTime").textContent = "0.0초";
+  $("#vocalStability").textContent = "--";
+  renderVocalTrace();
+}
+
+function updateVocalIdleTarget() {
+  const settings = getVocalSettings();
+  const targetMidi = getVocalTargetMidi();
+  $("#vocalTargetNote").textContent = displayMidiName(targetMidi, settings.key);
+  $("#vocalTargetText").textContent = settings.targetMode === "fixed"
+    ? `${displayMidiName(targetMidi, settings.key)} 목표음을 길게 불러 보세요.`
+    : `${settings.key} ${VOCAL_SCALE_LABELS[settings.scale]} 음에 맞춰 안내합니다.`;
+}
+
+function resetVocalDisplay(message = "한 음을 길고 편안하게 불러 주세요.") {
+  $("#vocalDetectedNote").textContent = "--";
+  $("#vocalDetectedNote").classList.remove("is-in-tune");
+  $("#vocalFrequency").textContent = "-- Hz";
+  $("#vocalCents").textContent = "-- cents";
+  $("#vocalNeedle").style.setProperty("--needle-position", "0");
+  $("#vocalNeedle").classList.remove("is-in-tune");
+  $("#vocalMessage").textContent = message;
+  updateVocalIdleTarget();
+}
+
+function updateVocalDisplay(frequency) {
+  const settings = getVocalSettings();
+  const range = VOCAL_RANGES[settings.range] || VOCAL_RANGES.all;
+  if (frequency < range.min || frequency > range.max) {
+    resetVocalDisplay("선택한 감지 범위를 벗어났습니다. 감지 범위를 바꾸거나 다른 음을 불러 주세요.");
+    setVocalBadge("범위 밖", "close");
+    return;
+  }
+
+  const targetMidi = getVocalTargetMidi(frequency);
+  if (state.vocalTargetMidi !== targetMidi) {
+    state.vocalRecentCents = [];
+    state.vocalHoldStart = 0;
+  }
+  state.vocalTargetMidi = targetMidi;
+
+  const targetFrequency = midiFrequency(targetMidi, getA4Reference());
+  const cents = 1200 * Math.log2(frequency / targetFrequency);
+  const roundedCents = Math.round(cents);
+  const absoluteCents = Math.abs(cents);
+  const inTune = absoluteCents <= 5;
+  const close = absoluteCents <= 15;
+  const detectedMidi = 69 + 12 * Math.log2(frequency / getA4Reference());
+  const detectedName = displayMidiName(Math.round(detectedMidi), settings.key);
+  const targetName = displayMidiName(targetMidi, settings.key);
+  const sign = roundedCents > 0 ? "+" : "";
+
+  $("#vocalDetectedNote").textContent = detectedName;
+  $("#vocalDetectedNote").classList.toggle("is-in-tune", inTune);
+  $("#vocalTargetNote").textContent = targetName;
+  $("#vocalTargetText").textContent = settings.targetMode === "fixed"
+    ? `${targetName} 목표음에 맞추는 중`
+    : `${settings.key} ${VOCAL_SCALE_LABELS[settings.scale]}에서 가장 가까운 목표음`;
+  $("#vocalFrequency").textContent = `${frequency.toFixed(1)} Hz`;
+  $("#vocalCents").textContent = `${sign}${roundedCents} cents`;
+  $("#vocalNeedle").style.setProperty("--needle-position", String(clamp(cents, -50, 50)));
+  $("#vocalNeedle").classList.toggle("is-in-tune", inTune);
+
+  const instantScore = Math.round(clamp(100 - absoluteCents * 2, 0, 100));
+  state.vocalScoreTotal += instantScore;
+  state.vocalScoreSamples += 1;
+  const averageScore = Math.round(state.vocalScoreTotal / state.vocalScoreSamples);
+  $("#vocalScore").textContent = `${averageScore}점`;
+
+  state.vocalRecentCents.push(cents);
+  if (state.vocalRecentCents.length > 10) state.vocalRecentCents.shift();
+  const stability = Math.round(clamp(100 - standardDeviation(state.vocalRecentCents) * 3, 0, 100));
+  $("#vocalStability").textContent = `${stability}%`;
+
+  if (close) {
+    if (!state.vocalHoldStart) state.vocalHoldStart = performance.now();
+    const holdSeconds = (performance.now() - state.vocalHoldStart) / 1000;
+    $("#vocalHoldTime").textContent = `${holdSeconds.toFixed(1)}초`;
+  } else {
+    state.vocalHoldStart = 0;
+    $("#vocalHoldTime").textContent = "0.0초";
+  }
+
+  state.vocalTrace.push(cents);
+  if (state.vocalTrace.length > 36) state.vocalTrace.shift();
+  renderVocalTrace();
+
+  if (inTune) {
+    $("#vocalMessage").textContent = "정확한 음정입니다. 같은 힘으로 유지해 보세요.";
+    setVocalBadge("정확", "listening");
+  } else if (close) {
+    $("#vocalMessage").textContent = cents < 0
+      ? "거의 맞았습니다. 소리를 아주 조금 올려 주세요."
+      : "거의 맞았습니다. 소리를 아주 조금 내려 주세요.";
+    setVocalBadge("거의 맞음", "close");
+  } else {
+    $("#vocalMessage").textContent = cents < 0
+      ? "목표음보다 낮습니다. 목에 힘을 주지 말고 음을 조금 올려 보세요."
+      : "목표음보다 높습니다. 힘을 조금 빼고 음을 내려 보세요.";
+    setVocalBadge(cents < 0 ? "낮음" : "높음", "close");
+  }
+}
+
+function runVocalAnalysis() {
+  if (!state.vocalRunning || !state.vocalAnalyser || !state.vocalBuffer) return;
+  state.vocalAnalyser.getFloatTimeDomainData(state.vocalBuffer);
+  const frequency = detectPitchYin(state.vocalBuffer, state.audioContext.sampleRate);
+
+  if (frequency) {
+    state.vocalMissCount = 0;
+    state.vocalPitchHistory.push(frequency);
+    if (state.vocalPitchHistory.length > 4) state.vocalPitchHistory.shift();
+    updateVocalDisplay(median(state.vocalPitchHistory));
+  } else {
+    state.vocalMissCount += 1;
+    if (state.vocalMissCount >= 5) {
+      state.vocalPitchHistory = [];
+      state.vocalHoldStart = 0;
+      resetVocalDisplay("목소리가 작거나 숨소리가 섞였습니다. 한 음을 조금 더 또렷하게 길게 불러 주세요.");
+      setVocalBadge("듣는 중", "listening");
+    }
+  }
+  state.vocalTimerId = window.setTimeout(runVocalAnalysis, 65);
+}
+
+async function startVocalTune() {
+  const requestToken = ++state.vocalRequestToken;
+  state.vocalStarting = true;
+  $("#toggleVocalTune").disabled = true;
+  $("#toggleVocalTune").textContent = "시작 중...";
+
+  try {
+    if (location.protocol === "file:") throw new Error("보컬튠은 마이크 보안을 위해 훈뮤직툴 실행.bat 또는 HTTPS 주소에서 실행해야 합니다.");
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error("이 브라우저 환경에서는 마이크를 사용할 수 없습니다. localhost 또는 HTTPS 주소로 접속해 주세요.");
+
+    stopMetronome();
+    stopProgression();
+    stopTuner(false);
+    setVocalBadge("권한 확인 중", "listening");
+    $("#vocalMessage").textContent = "마이크 사용 권한을 확인하고 있습니다.";
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        channelCount: 1
+      }
+    });
+    if (requestToken !== state.vocalRequestToken) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+
+    const audio = ensureAudioContext();
+    const analyser = audio.createAnalyser();
+    analyser.fftSize = 4096;
+    analyser.smoothingTimeConstant = 0;
+    const source = audio.createMediaStreamSource(stream);
+    source.connect(analyser);
+
+    state.vocalStream = stream;
+    state.vocalSource = source;
+    state.vocalAnalyser = analyser;
+    state.vocalBuffer = new Float32Array(analyser.fftSize);
+    state.vocalPitchHistory = [];
+    state.vocalMissCount = 0;
+    state.vocalStarting = false;
+    state.vocalRunning = true;
+    resetVocalPracticeStats(false);
+
+    $("#toggleVocalTune").disabled = false;
+    $("#toggleVocalTune").textContent = "보컬튠 정지";
+    setVocalBadge("듣는 중", "listening");
+    resetVocalDisplay("한 음을 길고 또렷하게 불러 주세요.");
+    runVocalAnalysis();
+  } catch (error) {
+    if (requestToken !== state.vocalRequestToken) return;
+    stopVocalTune(false);
+    const message = microphoneErrorMessage(error);
+    resetVocalDisplay(message);
+    setVocalBadge("사용 불가", "error");
+  }
+}
+
+function stopVocalTargetTone() {
+  state.vocalToneNodes.forEach((node) => {
+    try { node.stop?.(); } catch {}
+    try { node.disconnect?.(); } catch {}
+  });
+  state.vocalToneNodes = [];
+}
+
+function playVocalTargetTone() {
+  try {
+    const audio = ensureAudioContext();
+    stopVocalTargetTone();
+    const targetMidi = getVocalTargetMidi();
+    const frequency = midiFrequency(targetMidi, getA4Reference());
+    const now = audio.currentTime + 0.02;
+    const master = audio.createGain();
+    master.gain.setValueAtTime(0.0001, now);
+    master.gain.exponentialRampToValueAtTime(0.16, now + 0.025);
+    master.gain.setValueAtTime(0.16, now + 0.75);
+    master.gain.exponentialRampToValueAtTime(0.0001, now + 1.15);
+    master.connect(audio.destination);
+
+    const oscillator = audio.createOscillator();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(frequency, now);
+    oscillator.connect(master);
+    oscillator.start(now);
+    oscillator.stop(now + 1.18);
+
+    const harmonicGain = audio.createGain();
+    harmonicGain.gain.value = 0.22;
+    const harmonic = audio.createOscillator();
+    harmonic.type = "sine";
+    harmonic.frequency.setValueAtTime(frequency * 2, now);
+    harmonic.connect(harmonicGain).connect(master);
+    harmonic.start(now);
+    harmonic.stop(now + 1.18);
+
+    state.vocalToneNodes = [oscillator, harmonic, harmonicGain, master];
+    $("#vocalMessage").textContent = `${displayMidiName(targetMidi, getVocalSettings().key)} 기준음을 재생했습니다.`;
+    window.setTimeout(() => { state.vocalToneNodes = []; }, 1300);
+  } catch (error) {
+    $("#vocalMessage").textContent = error.message;
+  }
+}
+
+function stopVocalTune(reset = true) {
+  state.vocalRequestToken += 1;
+  state.vocalStarting = false;
+  window.clearTimeout(state.vocalTimerId);
+  state.vocalTimerId = null;
+  if (state.vocalSource) {
+    try { state.vocalSource.disconnect(); } catch {}
+  }
+  if (state.vocalStream) {
+    const streamIsRecording = state.recordingStream === state.vocalStream
+      && state.mediaRecorder
+      && state.mediaRecorder.state !== "inactive";
+    if (!streamIsRecording) state.vocalStream.getTracks().forEach((track) => track.stop());
+  }
+  state.vocalStream = null;
+  state.vocalSource = null;
+  state.vocalAnalyser = null;
+  state.vocalBuffer = null;
+  state.vocalPitchHistory = [];
+  state.vocalMissCount = 0;
+  state.vocalRunning = false;
+  stopVocalTargetTone();
+  $("#toggleVocalTune").disabled = false;
+  $("#toggleVocalTune").textContent = "보컬튠 시작";
+  if (reset) {
+    resetVocalDisplay("한 음을 길고 편안하게 불러 주세요.");
+    setVocalBadge("대기 중");
+  }
+}
+
+function toggleVocalTune() {
+  if (state.vocalStarting) return;
+  if (state.vocalRunning) stopVocalTune();
+  else startVocalTune();
+}
+
+
+function formatRecordingDuration(milliseconds) {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 KB";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function recordingExtension(mimeType = "") {
+  if (mimeType.includes("mp4")) return "m4a";
+  if (mimeType.includes("ogg")) return "ogg";
+  return "webm";
+}
+
+function safeRecordingFilename(name) {
+  return String(name || "보컬 녹음")
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60) || "보컬 녹음";
+}
+
+function defaultRecordingName() {
+  const now = new Date();
+  const date = now.toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" }).replace(/\s/g, "");
+  const time = now.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
+  return `보컬 녹음 ${date} ${time}`;
+}
+
+function openRecordingDb() {
+  if (state.recordingDbPromise) return state.recordingDbPromise;
+  state.recordingDbPromise = new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      reject(new Error("이 브라우저는 녹음 저장 기능을 지원하지 않습니다."));
+      return;
+    }
+    const request = indexedDB.open(RECORDING_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(RECORDING_STORE_NAME)) {
+        const store = db.createObjectStore(RECORDING_STORE_NAME, { keyPath: "id", autoIncrement: true });
+        store.createIndex("createdAt", "createdAt");
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("녹음 저장소를 열지 못했습니다."));
+  });
+  return state.recordingDbPromise;
+}
+
+async function getStoredRecordings() {
+  const db = await openRecordingDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(RECORDING_STORE_NAME, "readonly");
+    const request = transaction.objectStore(RECORDING_STORE_NAME).getAll();
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = () => reject(request.error || new Error("녹음 목록을 불러오지 못했습니다."));
+  });
+}
+
+async function addStoredRecording(recording) {
+  const db = await openRecordingDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(RECORDING_STORE_NAME, "readwrite");
+    const request = transaction.objectStore(RECORDING_STORE_NAME).add(recording);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("녹음 파일을 저장하지 못했습니다."));
+  });
+}
+
+async function deleteStoredRecording(id) {
+  const db = await openRecordingDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(RECORDING_STORE_NAME, "readwrite");
+    const request = transaction.objectStore(RECORDING_STORE_NAME).delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error || new Error("녹음 파일을 삭제하지 못했습니다."));
+  });
+}
+
+async function clearStoredRecordings() {
+  const db = await openRecordingDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(RECORDING_STORE_NAME, "readwrite");
+    const request = transaction.objectStore(RECORDING_STORE_NAME).clear();
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error || new Error("녹음 목록을 비우지 못했습니다."));
+  });
+}
+
+function revokeRecordingObjectUrls() {
+  state.recordingObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+  state.recordingObjectUrls = [];
+}
+
+function renderRecordings() {
+  const list = $("#recordingList");
+  revokeRecordingObjectUrls();
+  list.innerHTML = "";
+  const sorted = [...state.recordings].sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+  $("#recordingCount").textContent = `${sorted.length}개`;
+  $("#deleteAllRecordings").disabled = sorted.length === 0;
+
+  if (!sorted.length) {
+    const empty = document.createElement("div");
+    empty.className = "recording-empty";
+    empty.innerHTML = "<strong>저장된 녹음이 없습니다.</strong><span>녹음이 끝나면 이곳에서 바로 재생할 수 있습니다.</span>";
+    list.appendChild(empty);
+    return;
+  }
+
+  sorted.forEach((recording) => {
+    const item = document.createElement("article");
+    item.className = "recording-item";
+
+    const header = document.createElement("div");
+    header.className = "recording-item-header";
+    const titleWrap = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = recording.name || "보컬 녹음";
+    const meta = document.createElement("span");
+    const created = new Date(recording.createdAt);
+    meta.textContent = `${created.toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })} · ${formatRecordingDuration(recording.durationMs)} · ${formatFileSize(recording.blob?.size || 0)}`;
+    titleWrap.append(title, meta);
+    header.appendChild(titleWrap);
+
+    const audio = document.createElement("audio");
+    audio.controls = true;
+    audio.preload = "metadata";
+    const objectUrl = URL.createObjectURL(recording.blob);
+    state.recordingObjectUrls.push(objectUrl);
+    audio.src = objectUrl;
+
+    const actions = document.createElement("div");
+    actions.className = "recording-item-actions";
+    const downloadButton = document.createElement("button");
+    downloadButton.type = "button";
+    downloadButton.className = "recording-small-btn";
+    downloadButton.textContent = "파일 저장";
+    downloadButton.addEventListener("click", () => {
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `${safeRecordingFilename(recording.name)}.${recordingExtension(recording.mimeType)}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    });
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "recording-small-btn is-danger";
+    deleteButton.textContent = "삭제";
+    deleteButton.addEventListener("click", async () => {
+      if (!confirm(`‘${recording.name || "보컬 녹음"}’ 녹음을 삭제할까요?`)) return;
+      try {
+        if (recording.volatile) {
+          state.recordings = state.recordings.filter((item) => item.id !== recording.id);
+        } else {
+          await deleteStoredRecording(recording.id);
+          state.recordings = state.recordings.filter((item) => item.id !== recording.id);
+        }
+        renderRecordings();
+        $("#recordingMessage").textContent = "녹음 파일을 삭제했습니다.";
+      } catch (error) {
+        $("#recordingMessage").textContent = error.message;
+      }
+    });
+
+    actions.append(downloadButton, deleteButton);
+    item.append(header, audio, actions);
+    list.appendChild(item);
+  });
+}
+
+async function loadRecordings() {
+  try {
+    state.recordings = await getStoredRecordings();
+    renderRecordings();
+  } catch (error) {
+    state.recordings = [];
+    renderRecordings();
+    $("#recordingMessage").textContent = `${error.message} 이번 실행 중 녹음은 임시로 유지됩니다.`;
+  }
+}
+
+function setRecordingBadge(text, mode = "idle") {
+  const badge = $("#recordingStatusBadge");
+  badge.textContent = text;
+  badge.classList.toggle("is-recording", mode === "recording");
+  badge.classList.toggle("is-paused", mode === "paused");
+  badge.classList.toggle("is-saving", mode === "saving");
+  badge.classList.toggle("is-error", mode === "error");
+}
+
+function getRecordingElapsedMs() {
+  let elapsed = state.recordingActiveMs;
+  if (state.mediaRecorder?.state === "recording" && state.recordingSegmentStartedAt) {
+    elapsed += performance.now() - state.recordingSegmentStartedAt;
+  }
+  return elapsed;
+}
+
+function updateRecordingTimer() {
+  const elapsed = getRecordingElapsedMs();
+  $("#recordingTimer").textContent = formatRecordingDuration(elapsed);
+  if (elapsed >= MAX_RECORDING_MS && state.mediaRecorder?.state !== "inactive") {
+    $("#recordingMessage").textContent = "최대 녹음 시간 30분에 도달해 자동으로 저장합니다.";
+    stopRecording();
+  }
+}
+
+function stopRecordingLevelMonitor() {
+  cancelAnimationFrame(state.recordingLevelFrame);
+  state.recordingLevelFrame = null;
+  $("#recordingLevelBar").style.width = "0%";
+  if (state.recordingSource) {
+    try { state.recordingSource.disconnect(); } catch {}
+  }
+  state.recordingSource = null;
+  state.recordingAnalyser = null;
+  state.recordingLevelBuffer = null;
+}
+
+function runRecordingLevelMonitor() {
+  if (!state.recordingAnalyser || !state.recordingLevelBuffer || !state.mediaRecorder || state.mediaRecorder.state === "inactive") {
+    $("#recordingLevelBar").style.width = "0%";
+    return;
+  }
+  if (state.mediaRecorder.state === "paused") {
+    $("#recordingLevelBar").style.width = "0%";
+  } else {
+    state.recordingAnalyser.getByteTimeDomainData(state.recordingLevelBuffer);
+    let sum = 0;
+    for (const value of state.recordingLevelBuffer) {
+      const normalized = (value - 128) / 128;
+      sum += normalized * normalized;
+    }
+    const rms = Math.sqrt(sum / state.recordingLevelBuffer.length);
+    const level = clamp(Math.round(rms * 420), 2, 100);
+    $("#recordingLevelBar").style.width = `${level}%`;
+  }
+  state.recordingLevelFrame = requestAnimationFrame(runRecordingLevelMonitor);
+}
+
+function setupRecordingLevelMonitor(stream) {
+  stopRecordingLevelMonitor();
+  try {
+    const audio = ensureAudioContext();
+    const analyser = audio.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.65;
+    const source = audio.createMediaStreamSource(stream);
+    source.connect(analyser);
+    state.recordingSource = source;
+    state.recordingAnalyser = analyser;
+    state.recordingLevelBuffer = new Uint8Array(analyser.fftSize);
+    runRecordingLevelMonitor();
+  } catch {
+    $("#recordingLevelBar").style.width = "18%";
+  }
+}
+
+function preferredRecordingMimeType() {
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4;codecs=mp4a.40.2",
+    "audio/mp4",
+    "audio/ogg;codecs=opus"
+  ];
+  return candidates.find((type) => window.MediaRecorder?.isTypeSupported?.(type)) || "";
+}
+
+function resetRecordingControls() {
+  clearInterval(state.recordingTimerId);
+  state.recordingTimerId = null;
+  state.recordingStartedAt = 0;
+  state.recordingSegmentStartedAt = 0;
+  state.recordingActiveMs = 0;
+  $("#recordingTimer").textContent = "00:00";
+  $("#toggleRecording").disabled = false;
+  $("#toggleRecording").textContent = "● 녹음 시작";
+  $("#pauseRecording").disabled = true;
+  $("#pauseRecording").textContent = "일시정지";
+  $("#stopRecording").disabled = true;
+  $("#recordingName").disabled = false;
+  $("#recordingStateText").textContent = "녹음 시작을 누르면 마이크 소리가 저장됩니다.";
+  setRecordingBadge("준비");
+  stopRecordingLevelMonitor();
+}
+
+async function finishRecording(blob, durationMs, mimeType) {
+  const name = $("#recordingName").value.trim() || defaultRecordingName();
+  const record = {
+    name,
+    createdAt: Date.now(),
+    durationMs,
+    mimeType: mimeType || blob.type || "audio/webm",
+    blob
+  };
+  try {
+    const id = await addStoredRecording(record);
+    state.recordings.unshift({ ...record, id });
+    $("#recordingMessage").textContent = `‘${name}’ 녹음을 기기에 저장했습니다.`;
+  } catch (error) {
+    state.recordings.unshift({ ...record, id: `memory-${Date.now()}`, volatile: true });
+    $("#recordingMessage").textContent = `${error.message} 녹음은 현재 화면에서 임시로 재생·파일 저장할 수 있습니다.`;
+  }
+  $("#recordingName").value = "";
+  renderRecordings();
+}
+
+function cleanupRecordingStream() {
+  const stream = state.recordingStream;
+  const sharedWithActiveVocalTune = stream && stream === state.vocalStream && state.vocalRunning;
+  if (stream && !sharedWithActiveVocalTune) stream.getTracks().forEach((track) => track.stop());
+  state.recordingStream = null;
+  state.recordingChunks = [];
+  state.mediaRecorder = null;
+  resetRecordingControls();
+}
+
+async function startRecording() {
+  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") return;
+  try {
+    if (location.protocol === "file:") throw new Error("녹음은 훈뮤직툴 실행.bat 또는 HTTPS 주소에서 사용할 수 있습니다.");
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error("이 브라우저 환경에서는 마이크 녹음을 사용할 수 없습니다.");
+    if (!window.MediaRecorder) throw new Error("이 브라우저는 녹음 기능을 지원하지 않습니다. 최신 Chrome 또는 Edge를 사용해 주세요.");
+
+    stopMetronome();
+    stopProgression();
+    stopTuner(false);
+    stopVocalTargetTone();
+    $("#toggleRecording").disabled = true;
+    $("#toggleRecording").textContent = "마이크 확인 중...";
+    $("#recordingStateText").textContent = "마이크 사용 권한을 확인하고 있습니다.";
+    setRecordingBadge("권한 확인", "saving");
+
+    let stream = state.vocalStream;
+    const hasLiveTrack = stream?.getAudioTracks().some((track) => track.readyState === "live");
+    if (!hasLiveTrack) {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          channelCount: 1
+        }
+      });
+    }
+
+    state.recordingStream = stream;
+    const mimeType = preferredRecordingMimeType();
+    const options = mimeType ? { mimeType, audioBitsPerSecond: 128000 } : { audioBitsPerSecond: 128000 };
+    let recorder;
+    try {
+      recorder = new MediaRecorder(stream, options);
+    } catch {
+      recorder = new MediaRecorder(stream);
+    }
+
+    state.recordingChunks = [];
+    state.mediaRecorder = recorder;
+    state.recordingStartedAt = performance.now();
+    state.recordingSegmentStartedAt = state.recordingStartedAt;
+    state.recordingActiveMs = 0;
+
+    recorder.addEventListener("dataavailable", (event) => {
+      if (event.data?.size) state.recordingChunks.push(event.data);
+    });
+
+    recorder.addEventListener("stop", async () => {
+      const durationMs = Math.max(0, state.recordingActiveMs);
+      const chunks = [...state.recordingChunks];
+      const finalMime = recorder.mimeType || mimeType || chunks[0]?.type || "audio/webm";
+      const blob = new Blob(chunks, { type: finalMime });
+      setRecordingBadge("저장 중", "saving");
+      $("#recordingStateText").textContent = "녹음 파일을 기기에 저장하고 있습니다.";
+      if (blob.size > 0 && durationMs >= 250) await finishRecording(blob, durationMs, finalMime);
+      else $("#recordingMessage").textContent = "녹음 시간이 너무 짧거나 소리가 저장되지 않았습니다.";
+      cleanupRecordingStream();
+    }, { once: true });
+
+    recorder.addEventListener("error", (event) => {
+      $("#recordingMessage").textContent = event.error?.message || "녹음 중 오류가 발생했습니다.";
+      setRecordingBadge("오류", "error");
+    });
+
+    recorder.start(1000);
+    setupRecordingLevelMonitor(stream);
+    state.recordingTimerId = window.setInterval(updateRecordingTimer, 200);
+    $("#toggleRecording").disabled = true;
+    $("#toggleRecording").textContent = "● 녹음 중";
+    $("#pauseRecording").disabled = false;
+    $("#stopRecording").disabled = false;
+    $("#recordingName").disabled = true;
+    $("#recordingStateText").textContent = "녹음 중입니다. 보컬튠 화면을 보면서 노래해도 됩니다.";
+    $("#recordingMessage").textContent = "정지를 누르면 녹음이 자동으로 기기에 저장됩니다.";
+    setRecordingBadge("녹음 중", "recording");
+    updateRecordingTimer();
+  } catch (error) {
+    cleanupRecordingStream();
+    const message = microphoneErrorMessage(error);
+    $("#recordingMessage").textContent = message;
+    $("#recordingStateText").textContent = "녹음을 시작하지 못했습니다.";
+    setRecordingBadge("사용 불가", "error");
+  }
+}
+
+function toggleRecordingPause() {
+  const recorder = state.mediaRecorder;
+  if (!recorder || recorder.state === "inactive") return;
+  if (recorder.state === "recording") {
+    state.recordingActiveMs += performance.now() - state.recordingSegmentStartedAt;
+    state.recordingSegmentStartedAt = 0;
+    recorder.pause();
+    $("#pauseRecording").textContent = "계속 녹음";
+    $("#recordingStateText").textContent = "녹음을 잠시 멈췄습니다.";
+    setRecordingBadge("일시정지", "paused");
+    updateRecordingTimer();
+  } else if (recorder.state === "paused") {
+    recorder.resume();
+    state.recordingSegmentStartedAt = performance.now();
+    $("#pauseRecording").textContent = "일시정지";
+    $("#recordingStateText").textContent = "녹음을 계속하고 있습니다.";
+    setRecordingBadge("녹음 중", "recording");
+  }
+}
+
+function stopRecording() {
+  const recorder = state.mediaRecorder;
+  if (!recorder || recorder.state === "inactive") return;
+  if (recorder.state === "recording" && state.recordingSegmentStartedAt) {
+    state.recordingActiveMs += performance.now() - state.recordingSegmentStartedAt;
+    state.recordingSegmentStartedAt = 0;
+  }
+  clearInterval(state.recordingTimerId);
+  state.recordingTimerId = null;
+  updateRecordingTimer();
+  $("#pauseRecording").disabled = true;
+  $("#stopRecording").disabled = true;
+  $("#recordingStateText").textContent = "녹음을 마무리하고 있습니다.";
+  setRecordingBadge("저장 중", "saving");
+  try {
+    recorder.requestData?.();
+    recorder.stop();
+  } catch (error) {
+    $("#recordingMessage").textContent = error.message;
+    cleanupRecordingStream();
+  }
+}
+
+async function deleteAllRecordings() {
+  if (!state.recordings.length || !confirm(`저장된 녹음 ${state.recordings.length}개를 모두 삭제할까요?`)) return;
+  try {
+    if (state.recordings.some((recording) => !recording.volatile)) await clearStoredRecordings();
+    state.recordings = [];
+    renderRecordings();
+    $("#recordingMessage").textContent = "저장된 녹음을 모두 삭제했습니다.";
+  } catch (error) {
+    $("#recordingMessage").textContent = error.message;
+  }
+}
+
 function setupTabs() {
   $$(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
+      const target = tab.dataset.tab;
+      if (target !== "vocalTune" && state.mediaRecorder && state.mediaRecorder.state !== "inactive") stopRecording();
       stopMetronome();
       stopProgression();
       stopTuner();
-      const target = tab.dataset.tab;
+      stopVocalTune();
       $$(".tab").forEach((item) => {
         const active = item === tab;
         item.classList.toggle("is-active", active);
@@ -729,33 +2263,103 @@ function bindEvents() {
   });
 
   $("#randomizeBtn").addEventListener("click", generateProgression);
-  $("#keySelect").addEventListener("change", generateProgression);
-  $("#moodSelect").addEventListener("change", generateProgression);
+  ["#genreSelect", "#moodSelect", "#progressionLength"].forEach((selector) => {
+    $(selector).addEventListener("change", generateProgression);
+  });
+  ["#keySelect", "#modeSelect", "#complexitySelect"].forEach((selector) => {
+    $(selector).addEventListener("change", () => {
+      if (!state.progressionDegrees.length) state.progressionDegrees = chooseProgressionDegrees();
+      rebuildProgressionFromDegrees(true);
+    });
+  });
   $("#playProgression").addEventListener("click", playProgression);
   $("#stopProgression").addEventListener("click", stopProgression);
+  $("#playSelectedChord").addEventListener("click", () => playSingleChord(state.progression[state.selectedChordIndex]));
   $("#copyProgression").addEventListener("click", copyProgression);
+  $("#saveProgression").addEventListener("click", saveCurrentProgression);
+  ["#chordBpm", "#beatsPerChord", "#playStyle", "#soundPreset", "#loopProgression"].forEach((selector) => {
+    $(selector).addEventListener("change", savePlaybackSettings);
+  });
+
+  $("#toggleVocalTune").addEventListener("click", toggleVocalTune);
+  $("#playVocalTarget").addEventListener("click", playVocalTargetTone);
+  $("#toggleRecording").addEventListener("click", startRecording);
+  $("#pauseRecording").addEventListener("click", toggleRecordingPause);
+  $("#stopRecording").addEventListener("click", stopRecording);
+  $("#deleteAllRecordings").addEventListener("click", deleteAllRecordings);
+  $("#resetVocalPractice").addEventListener("click", () => {
+    resetVocalPracticeStats(false);
+    resetVocalDisplay("연습 기록을 초기화했습니다. 다시 한 음을 불러 주세요.");
+  });
+  ["#vocalKeySelect", "#vocalScaleSelect"].forEach((selector) => {
+    $(selector).addEventListener("change", () => {
+      ensureValidVocalFixedPitch();
+      state.vocalTargetMidi = null;
+      resetVocalPracticeStats(false);
+      renderVocalScaleNotes();
+      resetVocalDisplay("새 키와 스케일에 맞춰 한 음을 불러 주세요.");
+    });
+  });
+  $("#vocalTargetMode").addEventListener("change", () => {
+    state.vocalTargetMidi = null;
+    resetVocalPracticeStats(false);
+    renderVocalScaleNotes();
+    resetVocalDisplay("목표음 방식을 변경했습니다. 한 음을 불러 주세요.");
+  });
+  $("#vocalRangeSelect").addEventListener("change", () => {
+    saveVocalSettings();
+    state.vocalPitchHistory = [];
+    resetVocalDisplay("감지 범위를 변경했습니다. 한 음을 불러 주세요.");
+  });
+  $("#vocalTargetOctave").addEventListener("change", () => {
+    state.vocalTargetMidi = fixedVocalTargetMidi();
+    resetVocalPracticeStats(false);
+    saveVocalSettings();
+    updateVocalIdleTarget();
+  });
 
   $("#toggleTuner").addEventListener("click", toggleTuner);
   $("#a4Minus").addEventListener("click", () => setA4Reference(getA4Reference() - 1));
   $("#a4Plus").addEventListener("click", () => setA4Reference(getA4Reference() + 1));
   $("#a4Reference").addEventListener("change", (event) => setA4Reference(event.target.value));
   $("#tuningMode").addEventListener("change", (event) => {
-    localStorage.setItem("hoonMusicTuningMode", event.target.value);
+    const mode = event.target.value;
+    localStorage.setItem("hoonMusicTuningMode", mode);
+    const savedTargetValue = localStorage.getItem(`hoonMusicTarget_${mode}`);
+    const savedTarget = savedTargetValue === null ? -1 : Number(savedTargetValue);
+    state.tunerTargetIndex = Number.isInteger(savedTarget) ? savedTarget : -1;
     state.tunerPitchHistory = [];
+    renderTuningTargets();
     if (state.tunerRunning) resetTunerDisplay("새 튜닝 모드로 악기 한 음을 연주해 주세요.");
   });
 
+  window.addEventListener("beforeunload", (event) => {
+    if (!state.mediaRecorder || state.mediaRecorder.state === "inactive") return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+
   window.addEventListener("pagehide", () => {
+    stopRecording();
+    revokeRecordingObjectUrls();
     stopMetronome();
     stopProgression();
     stopTuner(false);
+    stopVocalTune(false);
   });
 }
 
 loadSettings();
 setupTabs();
 renderBeatIndicators();
+renderTuningTargets();
+renderVocalScaleNotes();
+resetVocalPracticeStats();
+resetVocalDisplay();
 generateProgression();
+renderSavedProgressions();
+renderRecordings();
+loadRecordings();
 bindEvents();
 setupPwaInstall();
 registerServiceWorker();

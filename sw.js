@@ -1,4 +1,4 @@
-const CACHE_NAME = "hoon-music-tool-v1.1.0";
+const CACHE_NAME = "hoon-music-tool-v1.5";
 const APP_SHELL = [
   "./",
   "./index.html",

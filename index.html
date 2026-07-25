@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#5b5bd6" />
-  <meta name="description" content="메트로놈, 음정 튜너, 코드 진행 생성기를 한곳에서 사용하는 가벼운 음악 연습 도구" />
+  <meta name="description" content="코드 진행·메트로놈·튜너·보컬 음정 연습과 기기 저장 녹음을 한곳에서 사용하는 개인용 음악 제작 도구" />
   <title>훈뮤직툴</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
@@ -22,13 +22,14 @@
     </header>
 
     <nav class="tabs" aria-label="주요 기능">
-      <button class="tab is-active" data-tab="metronome" aria-selected="true">메트로놈</button>
+      <button class="tab is-active" data-tab="chords" aria-selected="true">코드</button>
+      <button class="tab" data-tab="vocalTune" aria-selected="false">보컬튠</button>
+      <button class="tab" data-tab="metronome" aria-selected="false">메트로놈</button>
       <button class="tab" data-tab="tuner" aria-selected="false">튜너</button>
-      <button class="tab" data-tab="chords" aria-selected="false">코드 생성기</button>
     </nav>
 
     <main>
-      <section id="metronome" class="panel is-active" aria-labelledby="metronome-title">
+      <section id="metronome" class="panel" aria-labelledby="metronome-title">
         <div class="card tempo-card">
           <div class="section-heading">
             <div>
@@ -90,9 +91,13 @@
             <label>
               <span>튜닝 모드</span>
               <select id="tuningMode">
-                <option value="chromatic">크로매틱</option>
-                <option value="guitarStandard">기타 표준 E A D G B E</option>
-                <option value="guitarDropD">기타 Drop D</option>
+                <option value="chromatic">크로매틱 · 모든 음</option>
+                <option value="guitarStandard">기타 · 표준 E A D G B E</option>
+                <option value="guitarDropD">기타 · Drop D</option>
+                <option value="guitarHalfStepDown">기타 · 반음 낮춤</option>
+                <option value="guitarWholeStepDown">기타 · 온음 낮춤</option>
+                <option value="ukuleleStandard">우쿨렐레 · 표준 High G</option>
+                <option value="ukuleleLowG">우쿨렐레 · Low G</option>
               </select>
             </label>
             <label>
@@ -103,6 +108,14 @@
                 <button id="a4Plus" class="mini-step" type="button" aria-label="기준음 1Hz 높이기">＋</button>
               </div>
             </label>
+          </div>
+
+          <div id="stringTargetPanel" class="string-target-panel">
+            <div class="string-target-heading">
+              <span>맞출 줄 선택</span>
+              <small id="stringTargetHint">자동으로 가장 가까운 음을 찾습니다.</small>
+            </div>
+            <div id="stringTargetButtons" class="string-target-buttons" role="group" aria-label="맞출 줄 선택"></div>
           </div>
 
           <div class="tuner-display" aria-live="polite">
@@ -130,23 +143,210 @@
         </div>
       </section>
 
-      <section id="chords" class="panel" aria-labelledby="chords-title">
-        <div class="card">
+
+      <section id="vocalTune" class="panel" aria-labelledby="vocal-tune-title">
+        <div class="card vocal-card">
           <div class="section-heading">
             <div>
-              <p class="section-kicker">CHORDS</p>
-              <h2 id="chords-title">코드 진행 생성기</h2>
+              <p class="section-kicker">VOCAL TUNE</p>
+              <h2 id="vocal-tune-title">보컬튠</h2>
             </div>
-            <button id="randomizeBtn" class="text-btn">다시 생성</button>
+            <span id="vocalStatusBadge" class="tempo-label vocal-badge">대기 중</span>
           </div>
 
-          <div class="form-grid">
+          <div class="vocal-settings">
             <label>
-              <span>조성</span>
+              <span>노래 키</span>
+              <select id="vocalKeySelect">
+                <option>C</option><option>C#</option><option>D</option><option>Eb</option>
+                <option>E</option><option>F</option><option>F#</option><option>G</option>
+                <option>Ab</option><option>A</option><option>Bb</option><option>B</option>
+              </select>
+            </label>
+            <label>
+              <span>스케일</span>
+              <select id="vocalScaleSelect">
+                <option value="major">메이저</option>
+                <option value="minor">내추럴 마이너</option>
+                <option value="majorPentatonic">메이저 펜타토닉</option>
+                <option value="minorPentatonic">마이너 펜타토닉</option>
+                <option value="chromatic">크로매틱 · 모든 음</option>
+              </select>
+            </label>
+            <label>
+              <span>목표음 방식</span>
+              <select id="vocalTargetMode">
+                <option value="auto">노래한 음에 가장 가까운 스케일음</option>
+                <option value="fixed">목표음을 직접 고정</option>
+              </select>
+            </label>
+            <label>
+              <span>감지 범위</span>
+              <select id="vocalRangeSelect">
+                <option value="all">전체 음역</option>
+                <option value="low">저음 중심</option>
+                <option value="middle">중음 중심</option>
+                <option value="high">고음 중심</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="vocal-scale-strip">
+            <span>사용 음</span>
+            <div id="vocalScaleNotes" class="vocal-scale-notes" aria-label="선택한 스케일의 음"></div>
+          </div>
+
+          <div id="vocalFixedTargetPanel" class="vocal-fixed-target" hidden>
+            <div class="vocal-fixed-heading">
+              <span>연습할 목표음</span>
+              <label>
+                <span class="sr-only">목표 옥타브</span>
+                <select id="vocalTargetOctave" aria-label="목표 옥타브">
+                  <option value="2">2옥타브</option>
+                  <option value="3">3옥타브</option>
+                  <option value="4" selected>4옥타브</option>
+                  <option value="5">5옥타브</option>
+                  <option value="6">6옥타브</option>
+                </select>
+              </label>
+            </div>
+            <div id="vocalTargetButtons" class="vocal-target-buttons" role="group" aria-label="목표음 선택"></div>
+          </div>
+
+          <div class="vocal-display" aria-live="polite">
+            <p id="vocalTargetText" class="vocal-target-text">마이크를 시작해 주세요</p>
+            <div class="vocal-note-pair">
+              <div>
+                <span>현재 음</span>
+                <strong id="vocalDetectedNote">--</strong>
+              </div>
+              <div class="vocal-arrow" aria-hidden="true">→</div>
+              <div>
+                <span>목표 음</span>
+                <strong id="vocalTargetNote">--</strong>
+              </div>
+            </div>
+            <div class="pitch-values vocal-pitch-values">
+              <span id="vocalFrequency">-- Hz</span>
+              <span id="vocalCents">-- cents</span>
+            </div>
+          </div>
+
+          <div class="tuning-meter vocal-meter" aria-label="보컬 음정 오차 표시">
+            <div class="meter-track">
+              <span class="meter-mark left">-50</span>
+              <span class="meter-mark center">0</span>
+              <span class="meter-mark right">+50</span>
+              <div id="vocalNeedle" class="meter-needle"></div>
+            </div>
+            <div class="meter-labels"><span>낮음</span><span>정확</span><span>높음</span></div>
+          </div>
+
+          <div class="vocal-score-grid">
+            <div class="vocal-score-card">
+              <span>정확도</span>
+              <strong id="vocalScore">--</strong>
+            </div>
+            <div class="vocal-score-card">
+              <span>정확 유지</span>
+              <strong id="vocalHoldTime">0.0초</strong>
+            </div>
+            <div class="vocal-score-card">
+              <span>안정도</span>
+              <strong id="vocalStability">--</strong>
+            </div>
+          </div>
+
+          <div class="vocal-trace-wrap">
+            <div class="vocal-trace-heading"><span>최근 음정 움직임</span><small>가운데에 가까울수록 정확합니다.</small></div>
+            <div id="vocalPitchTrace" class="vocal-pitch-trace" aria-label="최근 음정 움직임"></div>
+          </div>
+
+          <div class="vocal-action-row">
+            <button id="playVocalTarget" class="secondary-btn" type="button">목표음 듣기</button>
+            <button id="toggleVocalTune" class="primary-btn" type="button">보컬튠 시작</button>
+          </div>
+          <button id="resetVocalPractice" class="text-reset-btn" type="button">연습 기록 초기화</button>
+          <p id="vocalMessage" class="helper vocal-message">이어폰 없이 마이크 모니터링 소리를 내보내면 하울링이 생길 수 있어, 이번 버전은 음정을 화면으로 안내합니다.</p>
+
+          <section class="recorder-panel" aria-labelledby="recorder-title">
+            <div class="recorder-heading">
+              <div>
+                <p class="section-kicker">VOICE RECORDER</p>
+                <h3 id="recorder-title">보컬 녹음</h3>
+              </div>
+              <span id="recordingStatusBadge" class="recording-status-badge">준비</span>
+            </div>
+
+            <label class="recording-name-field">
+              <span>녹음 이름</span>
+              <input id="recordingName" type="text" maxlength="40" placeholder="예: 후렴 연습 1" autocomplete="off" />
+            </label>
+
+            <div class="recording-monitor" aria-live="polite">
+              <strong id="recordingTimer">00:00</strong>
+              <div class="recording-level" aria-label="마이크 입력 크기">
+                <div id="recordingLevelBar" class="recording-level-bar"></div>
+              </div>
+              <span id="recordingStateText">녹음 시작을 누르면 마이크 소리가 저장됩니다.</span>
+            </div>
+
+            <div class="recording-controls">
+              <button id="toggleRecording" class="record-btn" type="button">● 녹음 시작</button>
+              <button id="pauseRecording" class="secondary-btn" type="button" disabled>일시정지</button>
+              <button id="stopRecording" class="secondary-btn" type="button" disabled>정지·저장</button>
+            </div>
+
+            <div class="recording-library-heading">
+              <div>
+                <strong>내 녹음</strong>
+                <span id="recordingCount">0개</span>
+              </div>
+              <button id="deleteAllRecordings" class="text-danger-btn" type="button" disabled>전체 삭제</button>
+            </div>
+            <div id="recordingList" class="recording-list" aria-live="polite"></div>
+            <p id="recordingMessage" class="helper recording-message">녹음 파일은 이 브라우저의 기기 저장 공간에만 보관됩니다.</p>
+          </section>
+
+          <p class="privacy-note">보컬튠 분석과 녹음 파일은 기기 안에서만 처리되며 외부로 전송하지 않습니다.</p>
+        </div>
+      </section>
+
+      <section id="chords" class="panel is-active" aria-labelledby="chords-title">
+        <div class="card chord-builder-card">
+          <div class="section-heading chord-heading">
+            <div>
+              <p class="section-kicker">CHORD MAKER</p>
+              <h2 id="chords-title">코드 진행 생성기</h2>
+            </div>
+            <button id="randomizeBtn" class="text-btn" type="button">새 진행 만들기</button>
+          </div>
+
+          <div class="form-grid chord-form-grid">
+            <label>
+              <span>으뜸음</span>
               <select id="keySelect">
                 <option>C</option><option>C#</option><option>D</option><option>Eb</option>
                 <option>E</option><option>F</option><option>F#</option><option>G</option>
                 <option>Ab</option><option>A</option><option>Bb</option><option>B</option>
+              </select>
+            </label>
+            <label>
+              <span>조성</span>
+              <select id="modeSelect">
+                <option value="major">메이저</option>
+                <option value="minor">마이너</option>
+              </select>
+            </label>
+            <label>
+              <span>장르</span>
+              <select id="genreSelect">
+                <option value="pop">팝</option>
+                <option value="ballad">발라드</option>
+                <option value="rock">록</option>
+                <option value="indie">인디</option>
+                <option value="rnb">R&amp;B</option>
+                <option value="jazz">재즈</option>
               </select>
             </label>
             <label>
@@ -156,8 +356,29 @@
                 <option value="emotional">감성적</option>
                 <option value="powerful">강하고 시원함</option>
                 <option value="dreamy">몽환적</option>
+                <option value="tense">긴장감</option>
               </select>
             </label>
+            <label>
+              <span>진행 길이</span>
+              <select id="progressionLength">
+                <option value="4">4코드</option>
+                <option value="8">8코드</option>
+              </select>
+            </label>
+            <label>
+              <span>코드 색채</span>
+              <select id="complexitySelect">
+                <option value="basic">기본 3화음</option>
+                <option value="colorful">감성 확장 코드</option>
+                <option value="seventh">7th 중심</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="generator-summary" aria-live="polite">
+            <span id="generatorSummary">C 메이저 · 팝 · 밝고 편안함</span>
+            <small>코드를 선택하면 구성음과 건반을 확인할 수 있습니다.</small>
           </div>
 
           <div class="chord-result">
@@ -165,25 +386,80 @@
             <div id="chordCards" class="chord-cards"></div>
           </div>
 
-          <div class="playback-controls">
+          <div class="selected-chord-panel">
+            <div class="selected-chord-header">
+              <div>
+                <span class="mini-label">선택한 코드</span>
+                <strong id="selectedChordName">C</strong>
+              </div>
+              <button id="playSelectedChord" class="secondary-small-btn" type="button">이 코드 듣기</button>
+            </div>
+            <p id="selectedChordInfo" class="selected-chord-info">구성음 C · E · G</p>
+            <div id="pianoKeyboard" class="piano-keyboard" aria-label="선택한 코드의 피아노 건반"></div>
+          </div>
+
+          <div class="playback-settings">
             <label>
               <span>재생 BPM</span>
               <input id="chordBpm" type="number" min="40" max="200" value="90" inputmode="numeric" />
             </label>
-            <button id="playProgression" class="primary-btn">코드 재생</button>
+            <label>
+              <span>코드당 박자</span>
+              <select id="beatsPerChord">
+                <option value="2">2박</option>
+                <option value="4" selected>4박</option>
+              </select>
+            </label>
+            <label>
+              <span>연주 방식</span>
+              <select id="playStyle">
+                <option value="block">한번에</option>
+                <option value="arpeggio">아르페지오</option>
+                <option value="pulse">리듬 반복</option>
+              </select>
+            </label>
+            <label>
+              <span>소리</span>
+              <select id="soundPreset">
+                <option value="soft">부드러운 피아노</option>
+                <option value="pad">따뜻한 패드</option>
+                <option value="pluck">짧은 플럭</option>
+              </select>
+            </label>
           </div>
 
-          <div class="action-row split">
-            <button id="copyProgression" class="secondary-btn">코드 복사</button>
-            <button id="stopProgression" class="secondary-btn">정지</button>
+          <label class="loop-option">
+            <input id="loopProgression" type="checkbox" />
+            <span>코드 진행 반복 재생</span>
+          </label>
+
+          <div class="playback-main-actions">
+            <button id="playProgression" class="primary-btn" type="button">전체 코드 재생</button>
+            <button id="stopProgression" class="secondary-btn" type="button">정지</button>
+          </div>
+
+          <div class="action-row chord-actions">
+            <button id="copyProgression" class="secondary-btn" type="button">코드 복사</button>
+            <button id="saveProgression" class="secondary-btn" type="button">내 진행 저장</button>
           </div>
           <p id="copyStatus" class="helper" aria-live="polite"></p>
+
+          <div class="saved-section">
+            <div class="saved-heading">
+              <div>
+                <span class="mini-label">MY PROGRESSIONS</span>
+                <h3>저장한 코드 진행</h3>
+              </div>
+              <span id="savedCount" class="saved-count">0개</span>
+            </div>
+            <div id="savedProgressions" class="saved-progressions"></div>
+          </div>
         </div>
       </section>
     </main>
 
     <footer>
-      <p>브라우저에서 실행되는 개인용 음악 연습 도구 · v1.1</p>
+      <p>브라우저에서 실행되는 개인용 음악 제작 도구 · v1.5</p>
     </footer>
   </div>
 
