@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#5b5bd6" />
-  <meta name="description" content="코드 진행·메트로놈·튜너·보컬 음정 연습과 기기 저장 녹음을 한곳에서 사용하는 개인용 음악 제작 도구" />
+  <meta name="description" content="코드 진행·메트로놈·튜너·보컬 음정 연습과 MR 반주 합성 녹음을 한곳에서 사용하는 개인용 음악 제작 도구" />
   <title>훈뮤직툴</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
@@ -272,15 +272,63 @@
           <section class="recorder-panel" aria-labelledby="recorder-title">
             <div class="recorder-heading">
               <div>
-                <p class="section-kicker">VOICE RECORDER</p>
-                <h3 id="recorder-title">보컬 녹음</h3>
+                <p class="section-kicker">MR RECORDING STUDIO</p>
+                <h3 id="recorder-title">MR 보컬 녹음</h3>
               </div>
               <span id="recordingStatusBadge" class="recording-status-badge">준비</span>
             </div>
 
+            <div class="mr-studio" aria-labelledby="mr-studio-title">
+              <div class="mr-studio-heading">
+                <div>
+                  <span class="mr-label">BACKING TRACK</span>
+                  <strong id="mr-studio-title">MR 반주</strong>
+                </div>
+                <span id="mrDuration">--:--</span>
+              </div>
+
+              <label class="mr-file-field">
+                <span>MR 파일 선택</span>
+                <input id="mrFileInput" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm" />
+              </label>
+              <div id="mrFileInfo" class="mr-file-info">
+                <strong id="mrFileName">선택된 MR이 없습니다.</strong>
+                <span>MP3·WAV·M4A 등 기기에 저장된 반주 파일을 불러올 수 있습니다.</span>
+              </div>
+
+              <audio id="mrAudio" class="mr-audio" controls preload="metadata" hidden></audio>
+
+              <div class="mr-action-row">
+                <button id="restartMr" class="secondary-btn" type="button" disabled>처음부터</button>
+                <button id="removeMr" class="secondary-btn" type="button" disabled>MR 제거</button>
+              </div>
+
+              <div class="mr-mixer-grid">
+                <label>
+                  <span>듣는 MR 음량 <output id="mrMonitorVolumeValue">80%</output></span>
+                  <input id="mrMonitorVolume" class="range compact" type="range" min="0" max="100" value="80" />
+                </label>
+                <label>
+                  <span>녹음 속 MR <output id="mrMixVolumeValue">70%</output></span>
+                  <input id="mrMixVolume" class="range compact" type="range" min="0" max="150" value="70" />
+                </label>
+                <label>
+                  <span>녹음 속 보컬 <output id="vocalMixVolumeValue">100%</output></span>
+                  <input id="vocalMixVolume" class="range compact" type="range" min="0" max="150" value="100" />
+                </label>
+              </div>
+
+              <div class="mr-options">
+                <label><input id="autoPlayMr" type="checkbox" checked /> 녹음 시작 시 MR을 처음부터 자동 재생</label>
+                <label><input id="includeMrInRecording" type="checkbox" checked /> 저장 파일에 MR과 보컬을 함께 녹음</label>
+                <label><input id="autoStopOnMrEnd" type="checkbox" checked /> MR이 끝나면 녹음을 자동 저장</label>
+              </div>
+              <p id="mrMessage" class="helper mr-message">이어폰을 사용하면 반주가 마이크에 다시 들어가 생기는 울림을 줄일 수 있습니다.</p>
+            </div>
+
             <label class="recording-name-field">
               <span>녹음 이름</span>
-              <input id="recordingName" type="text" maxlength="40" placeholder="예: 후렴 연습 1" autocomplete="off" />
+              <input id="recordingName" type="text" maxlength="40" placeholder="예: 후렴 MR 녹음 1" autocomplete="off" />
             </label>
 
             <div class="recording-monitor" aria-live="polite">
@@ -288,7 +336,7 @@
               <div class="recording-level" aria-label="마이크 입력 크기">
                 <div id="recordingLevelBar" class="recording-level-bar"></div>
               </div>
-              <span id="recordingStateText">녹음 시작을 누르면 마이크 소리가 저장됩니다.</span>
+              <span id="recordingStateText">MR을 선택한 뒤 녹음을 시작하면 반주와 보컬을 함께 저장할 수 있습니다.</span>
             </div>
 
             <div class="recording-controls">
@@ -305,10 +353,10 @@
               <button id="deleteAllRecordings" class="text-danger-btn" type="button" disabled>전체 삭제</button>
             </div>
             <div id="recordingList" class="recording-list" aria-live="polite"></div>
-            <p id="recordingMessage" class="helper recording-message">녹음 파일은 이 브라우저의 기기 저장 공간에만 보관됩니다.</p>
+            <p id="recordingMessage" class="helper recording-message">MR과 보컬이 합쳐진 녹음 파일은 이 브라우저의 기기 저장 공간에만 보관됩니다.</p>
           </section>
 
-          <p class="privacy-note">보컬튠 분석과 녹음 파일은 기기 안에서만 처리되며 외부로 전송하지 않습니다.</p>
+          <p class="privacy-note">보컬튠 분석, 선택한 MR, 녹음 파일은 기기 안에서만 처리되며 외부로 전송하지 않습니다.</p>
         </div>
       </section>
 
@@ -459,7 +507,7 @@
     </main>
 
     <footer>
-      <p>브라우저에서 실행되는 개인용 음악 제작 도구 · v1.5</p>
+      <p>브라우저에서 실행되는 개인용 음악 제작 도구 · v1.6</p>
     </footer>
   </div>
 

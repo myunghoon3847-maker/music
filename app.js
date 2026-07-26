@@ -66,7 +66,20 @@ const state = {
   recordingLevelBuffer: null,
   recordings: [],
   recordingObjectUrls: [],
-  recordingDbPromise: null
+  recordingDbPromise: null,
+  mrObjectUrl: null,
+  mrSourceNode: null,
+  mrMonitorGain: null,
+  mrRecordGain: null,
+  recordingVocalGain: null,
+  recordingMixDestination: null,
+  recordingMixMicSource: null,
+  recordingMixCompressor: null,
+  recordingMixMasterGain: null,
+  recordingOutputStream: null,
+  recordingControlsMr: false,
+  mrResumeAfterPause: false,
+  currentRecordingMeta: null
 };
 
 const NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -961,6 +974,14 @@ function loadSettings() {
   state.vocalFixedPitchClass = Number.isInteger(savedPitchClass) && savedPitchClass >= 0 && savedPitchClass < 12
     ? savedPitchClass
     : rootPitchClass;
+
+  $("#mrMonitorVolume").value = localStorage.getItem("hoonMusicMrMonitorVolume") || "80";
+  $("#mrMixVolume").value = localStorage.getItem("hoonMusicMrMixVolume") || "70";
+  $("#vocalMixVolume").value = localStorage.getItem("hoonMusicVocalMixVolume") || "100";
+  $("#autoPlayMr").checked = localStorage.getItem("hoonMusicAutoPlayMr") !== "0";
+  $("#includeMrInRecording").checked = localStorage.getItem("hoonMusicIncludeMr") !== "0";
+  $("#autoStopOnMrEnd").checked = localStorage.getItem("hoonMusicAutoStopMr") !== "0";
+  updateMrMixerLabels();
 }
 
 
@@ -1733,6 +1754,194 @@ function toggleVocalTune() {
 }
 
 
+
+function formatMrDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return "--:--";
+  return formatRecordingDuration(seconds * 1000);
+}
+
+function hasMrFile() {
+  const audio = $("#mrAudio");
+  return Boolean(audio?.src && state.mrObjectUrl);
+}
+
+function saveMrSettings() {
+  localStorage.setItem("hoonMusicMrMonitorVolume", $("#mrMonitorVolume").value);
+  localStorage.setItem("hoonMusicMrMixVolume", $("#mrMixVolume").value);
+  localStorage.setItem("hoonMusicVocalMixVolume", $("#vocalMixVolume").value);
+  localStorage.setItem("hoonMusicAutoPlayMr", $("#autoPlayMr").checked ? "1" : "0");
+  localStorage.setItem("hoonMusicIncludeMr", $("#includeMrInRecording").checked ? "1" : "0");
+  localStorage.setItem("hoonMusicAutoStopMr", $("#autoStopOnMrEnd").checked ? "1" : "0");
+}
+
+function updateMrMixerLabels() {
+  $("#mrMonitorVolumeValue").textContent = `${$("#mrMonitorVolume").value}%`;
+  $("#mrMixVolumeValue").textContent = `${$("#mrMixVolume").value}%`;
+  $("#vocalMixVolumeValue").textContent = `${$("#vocalMixVolume").value}%`;
+
+  const now = state.audioContext?.currentTime || 0;
+  if (state.mrMonitorGain) state.mrMonitorGain.gain.setTargetAtTime(Number($("#mrMonitorVolume").value) / 100, now, 0.01);
+  if (state.mrRecordGain) state.mrRecordGain.gain.setTargetAtTime(Number($("#mrMixVolume").value) / 100, now, 0.01);
+  if (state.recordingVocalGain) state.recordingVocalGain.gain.setTargetAtTime(Number($("#vocalMixVolume").value) / 100, now, 0.01);
+  saveMrSettings();
+}
+
+function updateRecordingIdleText() {
+  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") return;
+  $("#recordingStateText").textContent = hasMrFile()
+    ? "녹음 시작을 누르면 MR이 처음부터 재생되고 보컬과 함께 저장됩니다."
+    : "MR을 선택하지 않아도 보컬만 녹음할 수 있습니다.";
+}
+
+function ensureMrAudioGraph() {
+  if (!hasMrFile()) return null;
+  const audioContext = ensureAudioContext();
+  if (!state.mrSourceNode) {
+    state.mrSourceNode = audioContext.createMediaElementSource($("#mrAudio"));
+    state.mrMonitorGain = audioContext.createGain();
+    state.mrSourceNode.connect(state.mrMonitorGain);
+    state.mrMonitorGain.connect(audioContext.destination);
+  }
+  state.mrMonitorGain.gain.setTargetAtTime(Number($("#mrMonitorVolume").value) / 100, audioContext.currentTime, 0.01);
+  return state.mrSourceNode;
+}
+
+function setMrRecordingLocked(locked) {
+  $("#mrFileInput").disabled = locked;
+  $("#removeMr").disabled = locked || !hasMrFile();
+  $("#restartMr").disabled = locked || !hasMrFile();
+  $("#autoPlayMr").disabled = locked;
+  $("#includeMrInRecording").disabled = locked;
+  $("#autoStopOnMrEnd").disabled = locked;
+  $(".recorder-panel").classList.toggle("is-recording", locked);
+}
+
+function removeMrFile({ keepMessage = false } = {}) {
+  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") return;
+  const audio = $("#mrAudio");
+  audio.pause();
+  audio.removeAttribute("src");
+  audio.load();
+  audio.hidden = true;
+  if (state.mrObjectUrl) URL.revokeObjectURL(state.mrObjectUrl);
+  state.mrObjectUrl = null;
+  $("#mrFileInput").value = "";
+  $("#mrFileName").textContent = "선택된 MR이 없습니다.";
+  $("#mrFileInfo span").textContent = "MP3·WAV·M4A 등 기기에 저장된 반주 파일을 불러올 수 있습니다.";
+  $("#mrDuration").textContent = "--:--";
+  $("#restartMr").disabled = true;
+  $("#removeMr").disabled = true;
+  if (!keepMessage) $("#mrMessage").textContent = "MR을 제거했습니다. 새 반주 파일을 선택할 수 있습니다.";
+  updateRecordingIdleText();
+}
+
+function handleMrFileSelection(event) {
+  const [file] = event.target.files || [];
+  if (!file) return;
+  if (!file.type.startsWith("audio/") && !/\.(mp3|wav|m4a|aac|ogg|flac|webm)$/i.test(file.name)) {
+    $("#mrMessage").textContent = "오디오 형식의 MR 파일을 선택해 주세요.";
+    event.target.value = "";
+    return;
+  }
+  const audio = $("#mrAudio");
+  audio.pause();
+  if (state.mrObjectUrl) URL.revokeObjectURL(state.mrObjectUrl);
+  state.mrObjectUrl = URL.createObjectURL(file);
+  audio.src = state.mrObjectUrl;
+  audio.hidden = false;
+  audio.load();
+  $("#mrFileName").textContent = file.name;
+  $("#mrFileInfo span").textContent = `${formatFileSize(file.size)} · 기기 안에서만 사용됩니다.`;
+  $("#restartMr").disabled = false;
+  $("#removeMr").disabled = false;
+  $("#mrDuration").textContent = "불러오는 중";
+  $("#mrMessage").textContent = "MR을 불러왔습니다. 녹음 시작을 누르면 반주와 보컬을 함께 저장합니다.";
+  updateRecordingIdleText();
+}
+
+async function restartMrPlayback() {
+  if (!hasMrFile()) return;
+  try {
+    ensureMrAudioGraph();
+    const audio = $("#mrAudio");
+    audio.currentTime = 0;
+    await audio.play();
+    $("#mrMessage").textContent = "MR을 처음부터 재생하고 있습니다.";
+  } catch (error) {
+    $("#mrMessage").textContent = `MR을 재생하지 못했습니다: ${error.message}`;
+  }
+}
+
+function disconnectRecordingMix() {
+  if (state.recordingMixMicSource) {
+    try { state.recordingMixMicSource.disconnect(); } catch {}
+  }
+  if (state.recordingVocalGain) {
+    try { state.recordingVocalGain.disconnect(); } catch {}
+  }
+  if (state.mrRecordGain) {
+    try { state.mrSourceNode?.disconnect(state.mrRecordGain); } catch {}
+    try { state.mrRecordGain.disconnect(); } catch {}
+  }
+  if (state.recordingMixCompressor) {
+    try { state.recordingMixCompressor.disconnect(); } catch {}
+  }
+  if (state.recordingMixMasterGain) {
+    try { state.recordingMixMasterGain.disconnect(); } catch {}
+  }
+  if (state.recordingOutputStream) {
+    state.recordingOutputStream.getTracks().forEach((track) => {
+      try { track.stop(); } catch {}
+    });
+  }
+  state.recordingMixMicSource = null;
+  state.recordingVocalGain = null;
+  state.mrRecordGain = null;
+  state.recordingMixCompressor = null;
+  state.recordingMixMasterGain = null;
+  state.recordingMixDestination = null;
+  state.recordingOutputStream = null;
+}
+
+function createMixedRecordingStream(microphoneStream) {
+  const audioContext = ensureAudioContext();
+  const destination = audioContext.createMediaStreamDestination();
+  const microphoneSource = audioContext.createMediaStreamSource(microphoneStream);
+  const vocalGain = audioContext.createGain();
+  const compressor = audioContext.createDynamicsCompressor();
+  const masterGain = audioContext.createGain();
+  compressor.threshold.value = -12;
+  compressor.knee.value = 18;
+  compressor.ratio.value = 5;
+  compressor.attack.value = 0.003;
+  compressor.release.value = 0.18;
+  masterGain.gain.value = 0.86;
+  compressor.connect(masterGain);
+  masterGain.connect(destination);
+  vocalGain.gain.value = Number($("#vocalMixVolume").value) / 100;
+  microphoneSource.connect(vocalGain);
+  vocalGain.connect(compressor);
+
+  let includesMr = false;
+  if ($("#includeMrInRecording").checked && hasMrFile()) {
+    const mrSource = ensureMrAudioGraph();
+    const mrRecordGain = audioContext.createGain();
+    mrRecordGain.gain.value = Number($("#mrMixVolume").value) / 100;
+    mrSource.connect(mrRecordGain);
+    mrRecordGain.connect(compressor);
+    state.mrRecordGain = mrRecordGain;
+    includesMr = true;
+  }
+
+  state.recordingMixDestination = destination;
+  state.recordingMixMicSource = microphoneSource;
+  state.recordingMixCompressor = compressor;
+  state.recordingMixMasterGain = masterGain;
+  state.recordingVocalGain = vocalGain;
+  state.recordingOutputStream = destination.stream;
+  return { stream: destination.stream, includesMr };
+}
+
 function formatRecordingDuration(milliseconds) {
   const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
   const hours = Math.floor(totalSeconds / 3600);
@@ -1766,7 +1975,7 @@ function defaultRecordingName() {
   const now = new Date();
   const date = now.toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" }).replace(/\s/g, "");
   const time = now.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
-  return `보컬 녹음 ${date} ${time}`;
+  return `${state.currentRecordingMeta?.hasMr ? "MR 보컬 녹음" : "보컬 녹음"} ${date} ${time}`;
 }
 
 function openRecordingDb() {
@@ -1860,6 +2069,12 @@ function renderRecordings() {
     const titleWrap = document.createElement("div");
     const title = document.createElement("strong");
     title.textContent = recording.name || "보컬 녹음";
+    if (recording.hasMr) {
+      const tag = document.createElement("span");
+      tag.className = "recording-mr-tag";
+      tag.textContent = "MR 포함";
+      title.appendChild(tag);
+    }
     const meta = document.createElement("span");
     const created = new Date(recording.createdAt);
     meta.textContent = `${created.toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })} · ${formatRecordingDuration(recording.durationMs)} · ${formatFileSize(recording.blob?.size || 0)}`;
@@ -2026,18 +2241,22 @@ function resetRecordingControls() {
   $("#pauseRecording").textContent = "일시정지";
   $("#stopRecording").disabled = true;
   $("#recordingName").disabled = false;
-  $("#recordingStateText").textContent = "녹음 시작을 누르면 마이크 소리가 저장됩니다.";
+  updateRecordingIdleText();
   setRecordingBadge("준비");
+  setMrRecordingLocked(false);
   stopRecordingLevelMonitor();
 }
 
 async function finishRecording(blob, durationMs, mimeType) {
   const name = $("#recordingName").value.trim() || defaultRecordingName();
+  const meta = state.currentRecordingMeta || {};
   const record = {
     name,
     createdAt: Date.now(),
     durationMs,
     mimeType: mimeType || blob.type || "audio/webm",
+    hasMr: Boolean(meta.hasMr),
+    mrName: meta.mrName || "",
     blob
   };
   try {
@@ -2054,11 +2273,15 @@ async function finishRecording(blob, durationMs, mimeType) {
 
 function cleanupRecordingStream() {
   const stream = state.recordingStream;
+  disconnectRecordingMix();
   const sharedWithActiveVocalTune = stream && stream === state.vocalStream && state.vocalRunning;
   if (stream && !sharedWithActiveVocalTune) stream.getTracks().forEach((track) => track.stop());
   state.recordingStream = null;
   state.recordingChunks = [];
   state.mediaRecorder = null;
+  state.currentRecordingMeta = null;
+  state.recordingControlsMr = false;
+  state.mrResumeAfterPause = false;
   resetRecordingControls();
 }
 
@@ -2092,13 +2315,21 @@ async function startRecording() {
     }
 
     state.recordingStream = stream;
+    const recordingAudioContext = ensureAudioContext();
+    if (recordingAudioContext.state === "suspended") await recordingAudioContext.resume();
+    const mixed = createMixedRecordingStream(stream);
+    const recordingSourceStream = mixed.stream;
+    state.currentRecordingMeta = {
+      hasMr: mixed.includesMr,
+      mrName: mixed.includesMr ? $("#mrFileName").textContent : ""
+    };
     const mimeType = preferredRecordingMimeType();
-    const options = mimeType ? { mimeType, audioBitsPerSecond: 128000 } : { audioBitsPerSecond: 128000 };
+    const options = mimeType ? { mimeType, audioBitsPerSecond: 160000 } : { audioBitsPerSecond: 160000 };
     let recorder;
     try {
-      recorder = new MediaRecorder(stream, options);
+      recorder = new MediaRecorder(recordingSourceStream, options);
     } catch {
-      recorder = new MediaRecorder(stream);
+      recorder = new MediaRecorder(recordingSourceStream);
     }
 
     state.recordingChunks = [];
@@ -2136,9 +2367,27 @@ async function startRecording() {
     $("#pauseRecording").disabled = false;
     $("#stopRecording").disabled = false;
     $("#recordingName").disabled = true;
-    $("#recordingStateText").textContent = "녹음 중입니다. 보컬튠 화면을 보면서 노래해도 됩니다.";
-    $("#recordingMessage").textContent = "정지를 누르면 녹음이 자동으로 기기에 저장됩니다.";
+    setMrRecordingLocked(true);
     setRecordingBadge("녹음 중", "recording");
+
+    state.recordingControlsMr = false;
+    if ($("#autoPlayMr").checked && hasMrFile()) {
+      try {
+        ensureMrAudioGraph();
+        const mrAudio = $("#mrAudio");
+        mrAudio.currentTime = 0;
+        await mrAudio.play();
+        state.recordingControlsMr = true;
+      } catch (mrError) {
+        $("#mrMessage").textContent = `녹음은 시작됐지만 MR 자동 재생에 실패했습니다: ${mrError.message}`;
+      }
+    }
+
+    const includesMrText = state.currentRecordingMeta?.hasMr ? "MR과 보컬을 함께 녹음 중입니다." : "보컬만 녹음 중입니다.";
+    $("#recordingStateText").textContent = includesMrText;
+    $("#recordingMessage").textContent = state.currentRecordingMeta?.hasMr
+      ? "정지하면 MR과 보컬이 합쳐진 파일로 자동 저장됩니다."
+      : "정지하면 보컬 녹음 파일로 자동 저장됩니다.";
     updateRecordingTimer();
   } catch (error) {
     cleanupRecordingStream();
@@ -2156,6 +2405,11 @@ function toggleRecordingPause() {
     state.recordingActiveMs += performance.now() - state.recordingSegmentStartedAt;
     state.recordingSegmentStartedAt = 0;
     recorder.pause();
+    state.mrResumeAfterPause = false;
+    if (state.recordingControlsMr && !$("#mrAudio").paused) {
+      $("#mrAudio").pause();
+      state.mrResumeAfterPause = true;
+    }
     $("#pauseRecording").textContent = "계속 녹음";
     $("#recordingStateText").textContent = "녹음을 잠시 멈췄습니다.";
     setRecordingBadge("일시정지", "paused");
@@ -2163,6 +2417,8 @@ function toggleRecordingPause() {
   } else if (recorder.state === "paused") {
     recorder.resume();
     state.recordingSegmentStartedAt = performance.now();
+    if (state.mrResumeAfterPause && hasMrFile()) $("#mrAudio").play().catch(() => {});
+    state.mrResumeAfterPause = false;
     $("#pauseRecording").textContent = "일시정지";
     $("#recordingStateText").textContent = "녹음을 계속하고 있습니다.";
     setRecordingBadge("녹음 중", "recording");
@@ -2181,6 +2437,9 @@ function stopRecording() {
   updateRecordingTimer();
   $("#pauseRecording").disabled = true;
   $("#stopRecording").disabled = true;
+  if (state.recordingControlsMr) $("#mrAudio").pause();
+  state.recordingControlsMr = false;
+  state.mrResumeAfterPause = false;
   $("#recordingStateText").textContent = "녹음을 마무리하고 있습니다.";
   setRecordingBadge("저장 중", "saving");
   try {
@@ -2287,6 +2546,27 @@ function bindEvents() {
   $("#pauseRecording").addEventListener("click", toggleRecordingPause);
   $("#stopRecording").addEventListener("click", stopRecording);
   $("#deleteAllRecordings").addEventListener("click", deleteAllRecordings);
+  $("#mrFileInput").addEventListener("change", handleMrFileSelection);
+  $("#restartMr").addEventListener("click", restartMrPlayback);
+  $("#removeMr").addEventListener("click", () => removeMrFile());
+  ["#mrMonitorVolume", "#mrMixVolume", "#vocalMixVolume"].forEach((selector) => {
+    $(selector).addEventListener("input", updateMrMixerLabels);
+  });
+  ["#autoPlayMr", "#includeMrInRecording", "#autoStopOnMrEnd"].forEach((selector) => {
+    $(selector).addEventListener("change", saveMrSettings);
+  });
+  $("#mrAudio").addEventListener("loadedmetadata", () => {
+    $("#mrDuration").textContent = formatMrDuration($("#mrAudio").duration);
+  });
+  $("#mrAudio").addEventListener("play", () => {
+    try { ensureMrAudioGraph(); } catch (error) { $("#mrMessage").textContent = error.message; }
+  });
+  $("#mrAudio").addEventListener("ended", () => {
+    if (state.mediaRecorder && state.mediaRecorder.state !== "inactive" && state.recordingControlsMr && $("#autoStopOnMrEnd").checked) {
+      $("#recordingMessage").textContent = "MR 재생이 끝나 녹음을 자동으로 저장합니다.";
+      stopRecording();
+    }
+  });
   $("#resetVocalPractice").addEventListener("click", () => {
     resetVocalPracticeStats(false);
     resetVocalDisplay("연습 기록을 초기화했습니다. 다시 한 음을 불러 주세요.");
@@ -2341,6 +2621,8 @@ function bindEvents() {
 
   window.addEventListener("pagehide", () => {
     stopRecording();
+    $("#mrAudio").pause();
+    if (state.mrObjectUrl) URL.revokeObjectURL(state.mrObjectUrl);
     revokeRecordingObjectUrls();
     stopMetronome();
     stopProgression();
@@ -2359,6 +2641,7 @@ resetVocalDisplay();
 generateProgression();
 renderSavedProgressions();
 renderRecordings();
+updateRecordingIdleText();
 loadRecordings();
 bindEvents();
 setupPwaInstall();
