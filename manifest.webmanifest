@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "훈뮤직툴 - 코드·보컬튠·녹음실·메트로놈·튜너",
+  "name": "훈뮤직툴 Studio - 음악 작업실",
   "short_name": "훈뮤직툴",
-  "description": "코드 진행 생성, 보컬 음정 연습, 보컬·MR 분리 트랙 녹음, 녹음 제목·메모 관리, 메트로놈과 악기 튜너를 제공하는 개인용 음악 도구",
+  "description": "PC 작업실 UI와 모바일 앱 UI를 분리한 코드 진행, 보컬튠, 보컬·MR 분리 녹음, 메트로놈, 튜너 도구",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -11,7 +11,7 @@
     "minimal-ui",
     "browser"
   ],
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "background_color": "#f4f5fb",
   "theme_color": "#5b5bd6",
   "lang": "ko-KR",

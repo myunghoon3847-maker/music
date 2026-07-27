@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-title" content="훈뮤직툴" />
   <meta name="format-detection" content="telephone=no" />
   <meta name="description" content="코드 진행·보컬 음정 연습·보컬과 MR 분리 트랙 녹음·메트로놈·튜너를 제공하는 개인용 음악 제작 도구" />
-  <title>훈뮤직툴</title>
+  <title>훈뮤직툴 · Studio</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
@@ -302,6 +302,7 @@
             <span id="recordingStatusBadge" class="recording-status-badge">준비</span>
           </div>
           <section class="recorder-panel" aria-labelledby="recording-page-title">
+            <div class="recording-workbench-primary">
             <div class="mr-studio" aria-labelledby="mr-studio-title">
               <div class="mr-studio-heading">
                 <div>
@@ -374,7 +375,9 @@
               <div class="track-save-guide"><strong>보컬·MR 분리 저장</strong><span>녹음이 끝나면 보컬 원본과 MR을 각각 트랙으로 보관합니다. 간편 재생 파일도 함께 생성됩니다.</span></div>
               <p id="mrMessage" class="helper mr-message">싱크 값은 기기에 자동 저장됩니다.</p>
             </div>
+            </div>
 
+            <div class="recording-workbench-secondary">
             <div class="recording-entry-fields">
               <label class="recording-name-field">
                 <span>녹음 제목</span>
@@ -411,6 +414,7 @@
             </div>
             <div id="recordingList" class="recording-list" aria-live="polite"></div>
             <p id="recordingMessage" class="helper recording-message">보컬·MR 분리 트랙과 간편 재생 파일은 이 브라우저의 기기 저장 공간에 보관됩니다.</p>
+            </div>
           </section>
 
 
@@ -565,7 +569,7 @@
     </main>
 
     <footer>
-      <p>브라우저에서 실행되는 개인용 음악 제작 도구 · v1.7 보컬·MR 2트랙</p>
+      <p>PC 작업실 · 모바일 앱 반응형 UI · v1.8</p>
     </footer>
   </div>
 

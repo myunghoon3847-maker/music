@@ -1924,3 +1924,477 @@ input, select, textarea { font-size: 16px; }
   .recording-track-row { grid-template-columns: minmax(0, 1fr) 86px; }
   .recording-track-row .recording-small-btn { min-height: 34px; padding-inline: 8px; }
 }
+
+/* =========================================================
+   v1.8 PC Studio / Mobile App adaptive layout
+   ========================================================= */
+:root {
+  --studio-sidebar: 236px;
+  --studio-canvas: #eef0f6;
+  --studio-sidebar-bg: #191a2a;
+  --studio-sidebar-muted: #a5a7bd;
+  --studio-panel-line: #dde0eb;
+}
+
+.tab::before {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+.tab[data-tab="chords"]::before { content: "♬"; }
+.tab[data-tab="vocalTune"]::before { content: "♪"; }
+.tab[data-tab="recording"]::before { content: "●"; font-size: 0.68rem; }
+.tab[data-tab="metronome"]::before { content: "♩"; }
+.tab[data-tab="tuner"]::before { content: "⌁"; }
+
+@media (min-width: 900px) {
+  html, body { height: 100%; }
+  body {
+    overflow: hidden;
+    background: var(--studio-canvas);
+  }
+
+  .app-shell {
+    width: 100%;
+    max-width: none;
+    height: 100vh;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: var(--studio-sidebar) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    background: var(--studio-canvas);
+  }
+
+  .app-header {
+    grid-column: 1;
+    grid-row: 1;
+    display: block;
+    margin: 0;
+    padding: 26px 18px 18px;
+    color: #fff;
+    background: var(--studio-sidebar-bg);
+  }
+  .app-header .eyebrow {
+    margin-bottom: 7px;
+    color: #8f92bd;
+    font-size: 0.64rem;
+  }
+  .app-header h1 {
+    font-size: 1.48rem;
+    letter-spacing: -0.035em;
+  }
+  .header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    width: 100%;
+    margin-top: 16px;
+  }
+  .header-btn,
+  .install-btn {
+    min-width: 0;
+    height: 38px;
+    padding: 0 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    color: #dfe0ff;
+    background: rgba(255,255,255,0.065);
+    box-shadow: none;
+    font-size: 0.74rem;
+  }
+  .header-btn:hover,
+  .install-btn:hover { background: rgba(255,255,255,0.12); }
+
+  .mobile-ready-banner { display: none !important; }
+
+  .tabs {
+    grid-column: 1;
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
+    min-height: 0;
+    margin: 0;
+    padding: 8px 12px 18px;
+    border: 0;
+    border-radius: 0;
+    background: var(--studio-sidebar-bg);
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+  .tab {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    min-height: 46px;
+    padding: 0 12px;
+    border-radius: 11px;
+    color: var(--studio-sidebar-muted);
+    text-align: left;
+    font-size: 0.84rem;
+    transition: color .16s ease, background .16s ease, transform .16s ease;
+  }
+  .tab::before {
+    color: #bfc1db;
+    background: rgba(255,255,255,0.055);
+  }
+  .tab:hover {
+    color: #fff;
+    background: rgba(255,255,255,0.055);
+  }
+  .tab.is-active {
+    color: #fff;
+    background: linear-gradient(135deg, #6262e7, #5050c8);
+    box-shadow: 0 10px 24px rgba(28,28,78,.35);
+  }
+  .tab.is-active::before {
+    color: #fff;
+    background: rgba(255,255,255,.16);
+  }
+
+  main {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    min-width: 0;
+    height: 100vh;
+    overflow: auto;
+    padding: 18px 22px 28px;
+    scrollbar-gutter: stable;
+  }
+
+  footer {
+    grid-column: 1;
+    grid-row: 3;
+    margin: 0;
+    padding: 13px 18px 19px;
+    color: #777a98;
+    background: var(--studio-sidebar-bg);
+    text-align: left;
+    font-size: 0.62rem;
+    line-height: 1.45;
+  }
+
+  .panel.is-active {
+    display: block;
+    width: 100%;
+    min-height: calc(100vh - 46px);
+    animation: studio-reveal .16s ease;
+  }
+  @keyframes studio-reveal {
+    from { opacity: 0; transform: translateY(3px); }
+  }
+
+  .card {
+    padding: 20px;
+    border: 1px solid var(--studio-panel-line);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 7px 24px rgba(34,36,66,.055);
+  }
+  .section-heading { margin-bottom: 16px; }
+  .section-kicker { margin-bottom: 3px; font-size: .62rem; }
+  h2 { font-size: 1.25rem; }
+  select,
+  input[type="number"] { min-height: 42px; border-radius: 10px; }
+  .primary-btn,
+  .secondary-btn { min-height: 44px; border-radius: 11px; }
+  .helper { font-size: .72rem; }
+
+  /* 코드 작업실: 설정과 결과를 동시에 표시 */
+  #chords .chord-builder-card {
+    display: grid;
+    grid-template-columns: minmax(320px, 380px) minmax(460px, 1fr);
+    grid-template-areas:
+      "heading heading"
+      "form result"
+      "summary result"
+      "playback selected"
+      "loop selected"
+      "play-actions selected"
+      "actions selected"
+      "status selected"
+      "saved saved";
+    gap: 13px 18px;
+    align-items: start;
+  }
+  #chords .chord-heading { grid-area: heading; }
+  #chords .chord-form-grid { grid-area: form; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; }
+  #chords .generator-summary { grid-area: summary; margin: 0; }
+  #chords .chord-result { grid-area: result; margin: 0; min-height: 250px; }
+  #chords .selected-chord-panel { grid-area: selected; margin: 0; align-self: stretch; }
+  #chords .playback-settings { grid-area: playback; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; margin: 0; }
+  #chords .loop-option { grid-area: loop; margin: 0; }
+  #chords .playback-main-actions { grid-area: play-actions; margin: 0; }
+  #chords .chord-actions { grid-area: actions; margin: 0; }
+  #chords #copyStatus { grid-area: status; margin: 0; }
+  #chords .saved-section { grid-area: saved; margin-top: 4px; }
+  #chords .saved-progressions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #chords .chord-cards { gap: 10px; }
+  #chords .chord-card { min-height: 96px; }
+
+  /* 녹음 작업실: 왼쪽 입력·싱크, 오른쪽 녹음·라이브러리 */
+  #recording .recording-card { padding: 18px; }
+  #recording .recording-page-heading { margin-bottom: 12px; }
+  #recording .recorder-panel {
+    display: grid;
+    grid-template-columns: minmax(320px, 380px) minmax(440px, 1fr);
+    grid-template-areas:
+      "mr entry"
+      "mr countdown"
+      "mr monitor"
+      "mr controls"
+      "mr library-heading"
+      "mr library"
+      "mr message";
+    gap: 11px 18px;
+    align-items: start;
+  }
+  #recording .mr-studio {
+    grid-area: mr;
+    position: sticky;
+    top: 0;
+    padding: 15px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #f8f9fd;
+  }
+  #recording .recording-entry-fields { grid-area: entry; margin: 0; }
+  #recording .recording-countdown { grid-area: countdown; }
+  #recording .recording-monitor { grid-area: monitor; margin: 0; }
+  #recording .recording-controls { grid-area: controls; margin: 0; }
+  #recording .recording-library-heading { grid-area: library-heading; margin: 6px 0 0; }
+  #recording .recording-list {
+    grid-area: library;
+    max-height: calc(100vh - 330px);
+    overflow: auto;
+    padding-right: 4px;
+  }
+  #recording .recording-message { grid-area: message; margin: 0; }
+  #recording .recording-card > .privacy-note { margin-top: 12px; }
+  #recording .recording-entry-fields { grid-template-columns: minmax(0,.85fr) minmax(0,1.15fr); }
+  #recording .mr-sync-panel { margin-bottom: 8px; }
+  #recording .mr-advanced-settings { margin-bottom: 8px; }
+  #recording .track-save-guide { margin-top: 8px; }
+
+  /* 보컬튠: 설정/실시간 분석 2열 */
+  #vocalTune .vocal-card {
+    display: grid;
+    grid-template-columns: minmax(300px, 360px) minmax(440px, 1fr);
+    grid-template-areas:
+      "heading heading"
+      "settings display"
+      "scale meter"
+      "fixed scores"
+      "actions trace"
+      "reset trace"
+      "message trace"
+      "privacy privacy";
+    gap: 12px 18px;
+    align-items: start;
+  }
+  #vocalTune .section-heading { grid-area: heading; }
+  #vocalTune .vocal-settings { grid-area: settings; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+  #vocalTune .vocal-scale-strip { grid-area: scale; margin: 0; }
+  #vocalTune .vocal-fixed-target { grid-area: fixed; margin: 0; }
+  #vocalTune .vocal-display { grid-area: display; margin: 0; }
+  #vocalTune .vocal-meter { grid-area: meter; margin: 0; }
+  #vocalTune .vocal-score-grid { grid-area: scores; margin: 0; }
+  #vocalTune .vocal-trace-wrap { grid-area: trace; margin: 0; min-height: 212px; }
+  #vocalTune .vocal-action-row { grid-area: actions; margin: 0; }
+  #vocalTune .text-reset-btn { grid-area: reset; justify-self: start; }
+  #vocalTune .vocal-message { grid-area: message; margin: 0; }
+  #vocalTune .privacy-note { grid-area: privacy; margin: 0; }
+
+  /* 메트로놈과 튜너: 넓은 화면에서 정보 동시 노출 */
+  #metronome .tempo-card {
+    display: grid;
+    grid-template-columns: minmax(360px, .9fr) minmax(360px, 1.1fr);
+    grid-template-areas:
+      "heading heading"
+      "bpm controls"
+      "range controls"
+      "beats actions"
+      "helper actions";
+    gap: 12px 24px;
+    align-items: center;
+    min-height: 0;
+  }
+  #metronome .section-heading { grid-area: heading; align-self: start; }
+  #metronome .bpm-display { grid-area: bpm; margin: 0; }
+  #metronome #bpmSlider { grid-area: range; }
+  #metronome .beat-indicators { grid-area: beats; margin: 10px 0; }
+  #metronome .control-grid { grid-area: controls; grid-template-columns: 1fr; padding: 24px; border-radius: 14px; background:#f7f8fc; }
+  #metronome .action-row { grid-area: actions; align-self: start; margin: 0; }
+  #metronome .helper { grid-area: helper; }
+
+  #tuner .tuner-card {
+    display: grid;
+    grid-template-columns: minmax(330px, 390px) minmax(420px, 1fr);
+    grid-template-areas:
+      "heading heading"
+      "settings display"
+      "strings display"
+      "toggle meter"
+      "message meter"
+      "privacy privacy";
+    gap: 12px 22px;
+    align-items: start;
+    min-height: 0;
+  }
+  #tuner .section-heading { grid-area: heading; }
+  #tuner .tuner-settings { grid-area: settings; }
+  #tuner .string-target-panel { grid-area: strings; }
+  #tuner .tuner-display { grid-area: display; margin: 0; }
+  #tuner .tuning-meter { grid-area: meter; margin: 0; }
+  #tuner .tuner-toggle { grid-area: toggle; margin: 0; }
+  #tuner .tuner-message { grid-area: message; margin: 0; }
+  #tuner .privacy-note { grid-area: privacy; margin: 0; }
+}
+
+@media (min-width: 900px) and (max-width: 1180px) {
+  :root { --studio-sidebar: 208px; }
+  main { padding-inline: 16px; }
+  #chords .chord-builder-card,
+  #recording .recorder-panel,
+  #vocalTune .vocal-card,
+  #metronome .tempo-card,
+  #tuner .tuner-card {
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  }
+  #chords .saved-progressions { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+
+@media (max-width: 899px) {
+  body {
+    background:
+      radial-gradient(circle at top right, rgba(91, 91, 214, 0.09), transparent 34%),
+      var(--bg);
+  }
+  .app-shell {
+    width: 100%;
+    max-width: 760px;
+    min-height: 100vh;
+    margin: 0 auto;
+    padding: max(14px, env(safe-area-inset-top)) 12px calc(92px + env(safe-area-inset-bottom));
+  }
+  .app-header {
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .app-header h1 { font-size: 1.55rem; }
+  .app-header .eyebrow { font-size: .58rem; margin-bottom: 2px; }
+  .header-actions { gap: 6px; }
+  .header-btn,
+  .install-btn { min-width: 50px; height: 37px; padding: 0 9px; border-radius: 10px; font-size: .72rem; }
+
+  .tabs {
+    position: fixed;
+    z-index: 100;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2px;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 6px max(7px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(7px, env(safe-area-inset-left));
+    border: 0;
+    border-top: 1px solid rgba(40,42,70,.09);
+    border-radius: 0;
+    background: rgba(255,255,255,.94);
+    box-shadow: 0 -10px 28px rgba(35,37,68,.10);
+    backdrop-filter: blur(18px);
+    overflow: visible;
+  }
+  .tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 0;
+    min-height: 56px;
+    padding: 4px 1px;
+    border-radius: 10px;
+    color: var(--muted);
+    font-size: .65rem;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .tab::before {
+    width: 27px;
+    height: 27px;
+    color: var(--muted);
+    background: transparent;
+  }
+  .tab.is-active {
+    color: var(--accent);
+    background: var(--accent-soft);
+    box-shadow: none;
+  }
+  .tab.is-active::before {
+    color: #fff;
+    background: var(--accent);
+  }
+
+  main { width: 100%; }
+  footer { display: none; }
+  .card { padding: 16px 14px; border-radius: 18px; box-shadow: 0 10px 30px rgba(38,39,74,.07); }
+  .section-heading { margin-bottom: 18px; }
+  .mobile-ready-banner { margin-bottom: 10px; }
+}
+
+@media (max-width: 430px) {
+  .app-shell { padding-inline: 9px; }
+  .card { padding-inline: 12px; }
+  .tab { font-size: .6rem; }
+  .tab::before { width: 25px; height: 25px; }
+}
+
+/* v1.8 recording workbench wrapper correction */
+.recording-workbench-primary,
+.recording-workbench-secondary { min-width: 0; }
+@media (min-width: 900px) {
+  #recording .recorder-panel {
+    display: grid;
+    grid-template-columns: minmax(320px, 380px) minmax(440px, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+  #recording .recording-workbench-primary {
+    position: sticky;
+    top: 0;
+  }
+  #recording .recording-workbench-secondary {
+    display: grid;
+    gap: 11px;
+    align-content: start;
+  }
+  #recording .mr-studio {
+    position: static;
+  }
+  #recording .recording-entry-fields,
+  #recording .recording-monitor,
+  #recording .recording-controls,
+  #recording .recording-library-heading,
+  #recording .recording-list,
+  #recording .recording-message {
+    grid-area: auto;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  #recording .recording-list {
+    max-height: calc(100vh - 370px);
+  }
+}
