@@ -319,43 +319,51 @@
                 <button id="removeMr" class="secondary-btn" type="button" disabled>MR 제거</button>
               </div>
 
-              <div class="mr-mixer-grid">
-                <label>
-                  <span>듣는 MR 음량 <output id="mrMonitorVolumeValue">80%</output></span>
-                  <input id="mrMonitorVolume" class="range compact" type="range" min="0" max="100" value="80" />
-                </label>
-                <label>
-                  <span>녹음 속 MR <output id="mrMixVolumeValue">70%</output></span>
-                  <input id="mrMixVolume" class="range compact" type="range" min="0" max="150" value="70" />
-                </label>
-                <label>
-                  <span>녹음 속 보컬 <output id="vocalMixVolumeValue">100%</output></span>
-                  <input id="vocalMixVolume" class="range compact" type="range" min="0" max="150" value="100" />
-                </label>
-              </div>
-
               <div class="mr-sync-panel" aria-labelledby="mr-sync-title">
                 <div class="mr-sync-heading">
-                  <strong id="mr-sync-title">녹음 싱크 보정</strong>
-                  <output id="mrSyncOffsetValue">+120ms</output>
+                  <strong id="mr-sync-title">싱크 보정</strong>
+                  <div class="mr-sync-number-wrap">
+                    <input id="mrSyncNumber" type="number" min="-800" max="800" step="10" value="0" inputmode="numeric" aria-label="싱크 보정값 직접 입력" />
+                    <span>ms</span>
+                  </div>
+                  <output id="mrSyncOffsetValue" class="sr-only">0ms</output>
                 </div>
-                <input id="mrSyncOffset" class="range compact" type="range" min="-300" max="500" step="10" value="120" />
-                <div class="mr-sync-scale"><span>보컬이 빠를 때 −</span><span>보컬이 늦을 때 +</span></div>
+                <input id="mrSyncOffset" class="range compact" type="range" min="-800" max="800" step="10" value="0" aria-label="녹음 싱크 보정" />
+                <div class="mr-sync-scale" aria-hidden="true"><span>−800</span><span>−400</span><span>0</span><span>+400</span><span>+800</span></div>
                 <div class="mr-sync-actions">
-                  <button id="mrSyncMinus" class="secondary-btn" type="button">−10ms</button>
-                  <button id="mrSyncReset" class="secondary-btn" type="button">기본값</button>
-                  <button id="mrSyncPlus" class="secondary-btn" type="button">+10ms</button>
+                  <button id="mrSyncMinus" class="secondary-btn" type="button">−10</button>
+                  <button id="mrSyncReset" class="secondary-btn" type="button">0으로</button>
+                  <button id="mrSyncPlus" class="secondary-btn" type="button">+10</button>
                 </div>
-                <p>녹음 결과에서 보컬이 MR보다 늦게 들리면 + 방향으로, 빠르게 들리면 − 방향으로 조절합니다. 듣는 MR에는 지연이 적용되지 않습니다.</p>
+                <p>보컬이 늦으면 +, 빠르면 −. 듣는 MR에는 적용되지 않습니다.</p>
               </div>
 
-              <div class="mr-options">
-                <label><input id="autoPlayMr" type="checkbox" checked /> 녹음 시작 시 MR을 처음부터 자동 재생</label>
-                <label><input id="includeMrInRecording" type="checkbox" checked /> 저장 파일에 MR과 보컬을 함께 녹음</label>
-                <label><input id="autoStopOnMrEnd" type="checkbox" checked /> MR이 끝나면 녹음을 자동 저장</label>
-                <label><input id="recordingCountIn" type="checkbox" checked /> 시작 전에 3초 카운트인 재생</label>
-              </div>
-              <p id="mrMessage" class="helper mr-message">기본 싱크 보정은 +120ms입니다. 유선 이어폰으로 짧게 녹음한 뒤 ±10ms 버튼으로 맞추면 기기에 저장됩니다.</p>
+              <details class="mr-advanced-settings">
+                <summary>음량·녹음 옵션</summary>
+                <div class="mr-advanced-content">
+                  <div class="mr-mixer-grid">
+                    <label>
+                      <span>듣는 MR <output id="mrMonitorVolumeValue">80%</output></span>
+                      <input id="mrMonitorVolume" class="range compact" type="range" min="0" max="100" value="80" />
+                    </label>
+                    <label>
+                      <span>녹음 MR <output id="mrMixVolumeValue">70%</output></span>
+                      <input id="mrMixVolume" class="range compact" type="range" min="0" max="150" value="70" />
+                    </label>
+                    <label>
+                      <span>녹음 보컬 <output id="vocalMixVolumeValue">100%</output></span>
+                      <input id="vocalMixVolume" class="range compact" type="range" min="0" max="150" value="100" />
+                    </label>
+                  </div>
+                  <div class="mr-options">
+                    <label><input id="autoPlayMr" type="checkbox" checked /> MR 자동 재생</label>
+                    <label><input id="includeMrInRecording" type="checkbox" checked /> MR+보컬 함께 저장</label>
+                    <label><input id="autoStopOnMrEnd" type="checkbox" checked /> MR 종료 시 자동 저장</label>
+                    <label><input id="recordingCountIn" type="checkbox" checked /> 3초 카운트인</label>
+                  </div>
+                </div>
+              </details>
+              <p id="mrMessage" class="helper mr-message">싱크 값은 기기에 자동 저장됩니다.</p>
             </div>
 
             <label class="recording-name-field">
@@ -541,7 +549,7 @@
     </main>
 
     <footer>
-      <p>브라우저에서 실행되는 개인용 음악 제작 도구 · v1.6.3 싱크 안정화</p>
+      <p>브라우저에서 실행되는 개인용 음악 제작 도구 · v1.6.4 플레이어·UI 개선</p>
     </footer>
   </div>
 
