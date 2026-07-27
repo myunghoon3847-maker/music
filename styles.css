@@ -1877,3 +1877,50 @@ input, select, textarea { font-size: 16px; }
 .recording-page-heading .recording-status-badge { flex: 0 0 auto; }
 
 .recording-item-actions { display: grid; }
+
+
+/* v1.7 separated recording tracks */
+.track-save-guide {
+  display: grid;
+  gap: 3px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+.track-save-guide strong { font-size: 0.76rem; }
+.track-save-guide span { color: var(--muted); font-size: 0.68rem; line-height: 1.45; }
+.recording-mr-tag.is-tracks { background: color-mix(in srgb, var(--accent) 15%, var(--surface)); color: var(--accent); }
+.recording-track-panel {
+  margin-top: 9px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);
+  overflow: hidden;
+}
+.recording-track-panel summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  list-style-position: inside;
+}
+.recording-track-list { display: grid; gap: 7px; padding: 0 10px 10px; }
+.recording-track-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: var(--surface);
+}
+.recording-track-row > div { display: grid; gap: 2px; min-width: 0; }
+.recording-track-row strong { font-size: 0.72rem; }
+.recording-track-row span { color: var(--muted); font-size: 0.63rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recording-track-timeline { margin: 2px 2px 0; color: var(--muted); font-size: 0.63rem; line-height: 1.45; }
+@media (max-width: 520px) {
+  .recording-track-row { grid-template-columns: minmax(0, 1fr) 86px; }
+  .recording-track-row .recording-small-btn { min-height: 34px; padding-inline: 8px; }
+}
