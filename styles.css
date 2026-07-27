@@ -1375,3 +1375,211 @@ footer {
   .mr-mixer-grid { grid-template-columns: 1fr; }
   .mr-mixer-grid label { padding: 9px 10px; }
 }
+
+/* v1.6.2 모바일 바로 실행·설치 */
+html, body { overscroll-behavior-y: none; }
+body { min-height: 100dvh; }
+button, a, input, select { touch-action: manipulation; }
+input, select, textarea { font-size: 16px; }
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.header-btn,
+.install-btn {
+  min-width: 58px;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(91, 91, 214, 0.12);
+  border-radius: 14px;
+  color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 10px 28px rgba(38, 39, 74, 0.08);
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+.header-btn:disabled,
+.install-btn:disabled { opacity: 0.55; cursor: default; }
+
+.mobile-ready-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 13px 14px;
+  border: 1px solid rgba(91, 91, 214, 0.18);
+  border-radius: 17px;
+  background: linear-gradient(135deg, rgba(236, 236, 254, 0.95), rgba(255,255,255,0.95));
+}
+.mobile-ready-banner[hidden] { display: none; }
+.mobile-ready-banner div { min-width: 0; }
+.mobile-ready-banner strong,
+.mobile-ready-banner span { display: block; }
+.mobile-ready-banner strong { margin-bottom: 3px; font-size: 0.9rem; }
+.mobile-ready-banner span { color: var(--muted); font-size: 0.76rem; line-height: 1.45; }
+.mobile-ready-banner button {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 12px;
+  color: white;
+  background: var(--accent);
+  font-weight: 800;
+}
+
+.install-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  align-items: end;
+  justify-items: stretch;
+}
+.install-sheet[hidden] { display: none; }
+.install-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  background: rgba(25, 26, 48, 0.48);
+  backdrop-filter: blur(4px);
+}
+.install-sheet-card {
+  position: relative;
+  width: min(100%, 620px);
+  max-height: min(82dvh, 720px);
+  margin: 0 auto;
+  overflow: auto;
+  padding: 22px 20px max(24px, env(safe-area-inset-bottom));
+  border-radius: 26px 26px 0 0;
+  background: var(--surface);
+  box-shadow: 0 -22px 60px rgba(25, 26, 48, 0.22);
+  animation: installSheetUp 0.2s ease-out;
+}
+@keyframes installSheetUp { from { transform: translateY(20px); opacity: 0; } }
+.install-sheet-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.sheet-close {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 13px;
+  color: var(--muted);
+  background: var(--bg);
+  font-size: 1.6rem;
+  line-height: 1;
+}
+.install-guide-content {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.install-step {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #fafaff;
+}
+.install-step strong {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  color: white;
+  background: var(--accent);
+  font-size: 0.78rem;
+}
+.install-step p { margin: 3px 0 0; color: var(--text); line-height: 1.55; font-size: 0.88rem; }
+.install-note {
+  margin: 0;
+  padding: 12px 13px;
+  border-radius: 14px;
+  color: var(--muted);
+  background: var(--bg);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.update-toast {
+  position: fixed;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 900;
+  width: min(calc(100% - 28px), 520px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 13px;
+  border-radius: 16px;
+  color: white;
+  background: #252640;
+  box-shadow: 0 18px 45px rgba(25, 26, 48, 0.28);
+}
+.update-toast button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 11px;
+  color: #252640;
+  background: white;
+  font-weight: 850;
+}
+
+@media (max-width: 680px) {
+  .app-shell {
+    width: 100%;
+    padding: max(16px, env(safe-area-inset-top)) 12px max(26px, env(safe-area-inset-bottom));
+  }
+  .app-header { margin-bottom: 12px; }
+  .app-header h1 { font-size: clamp(1.65rem, 8.5vw, 2.15rem); }
+  .eyebrow { font-size: 0.62rem; }
+  .header-actions { gap: 6px; }
+  .header-btn, .install-btn { min-width: 52px; height: 39px; padding: 0 10px; font-size: 0.78rem; }
+  .tabs {
+    position: sticky;
+    top: max(6px, env(safe-area-inset-top));
+    z-index: 50;
+    grid-template-columns: repeat(4, minmax(70px, 1fr));
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    box-shadow: 0 10px 28px rgba(38, 39, 74, 0.08);
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { min-height: 43px; padding: 0 9px; white-space: nowrap; font-size: 0.82rem; }
+  .card { padding: 18px 15px; border-radius: 20px; }
+  .section-heading { margin-bottom: 20px; }
+  .mobile-ready-banner { align-items: flex-start; }
+  .install-sheet-card { padding-inline: 16px; }
+  .recording-controls,
+  .mr-action-row,
+  .vocal-action-row,
+  .playback-main-actions { gap: 8px; }
+  .recording-controls > button,
+  .mr-action-row > button,
+  .vocal-action-row > button,
+  .playback-main-actions > button { min-height: 48px; }
+}
+
+@media (display-mode: standalone) {
+  .install-btn { display: none; }
+  .app-shell { padding-top: max(14px, env(safe-area-inset-top)); }
+}

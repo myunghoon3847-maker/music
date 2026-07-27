@@ -23,6 +23,7 @@ const state = {
   progressionCycleDuration: 0,
   savedProgressions: [],
   deferredInstallPrompt: null,
+  pwaUpdateReady: false,
   tunerRunning: false,
   tunerStarting: false,
   tunerRequestToken: 0,
@@ -72,6 +73,8 @@ const state = {
   mrMonitorGain: null,
   mrRecordGain: null,
   recordingVocalGain: null,
+  recordingVocalCompressor: null,
+  recordingMixBus: null,
   recordingMixDestination: null,
   recordingMixMicSource: null,
   recordingMixCompressor: null,
@@ -1618,7 +1621,7 @@ async function startVocalTune() {
   $("#toggleVocalTune").textContent = "시작 중...";
 
   try {
-    if (location.protocol === "file:") throw new Error("보컬튠은 마이크 보안을 위해 훈뮤직툴 실행.bat 또는 HTTPS 주소에서 실행해야 합니다.");
+    if (location.protocol === "file:") throw new Error("보컬튠은 PC에서 훈뮤직툴 실행.bat을 사용하거나, 모바일에서 HTTPS 배포 주소로 열어야 합니다.");
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error("이 브라우저 환경에서는 마이크를 사용할 수 없습니다. localhost 또는 HTTPS 주소로 접속해 주세요.");
 
     stopMetronome();
@@ -1774,6 +1777,52 @@ function saveMrSettings() {
   localStorage.setItem("hoonMusicAutoStopMr", $("#autoStopOnMrEnd").checked ? "1" : "0");
 }
 
+function getMrRecordingGainValue() {
+  // 상용 MR은 이미 최대 음량에 가깝기 때문에 녹음 버스에 여유 공간을 확보합니다.
+  return (Number($("#mrMixVolume").value) / 100) * 0.62;
+}
+
+function getVocalRecordingGainValue() {
+  return (Number($("#vocalMixVolume").value) / 100) * 0.72;
+}
+
+function waitForMrReady(timeoutMs = 6000) {
+  if (!hasMrFile()) return Promise.resolve();
+  const audio = $("#mrAudio");
+  if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("MR 파일을 충분히 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."));
+    }, timeoutMs);
+    const onReady = () => { cleanup(); resolve(); };
+    const onError = () => { cleanup(); reject(new Error("MR 파일을 재생할 수 없습니다. MP3 또는 WAV 파일로 다시 시도해 주세요.")); };
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      audio.removeEventListener("canplay", onReady);
+      audio.removeEventListener("loadeddata", onReady);
+      audio.removeEventListener("error", onError);
+    };
+    audio.addEventListener("canplay", onReady, { once: true });
+    audio.addEventListener("loadeddata", onReady, { once: true });
+    audio.addEventListener("error", onError, { once: true });
+    audio.load();
+  });
+}
+
+async function warnIfBluetoothMicrophone(stream) {
+  try {
+    const track = stream?.getAudioTracks?.()[0];
+    const deviceId = track?.getSettings?.().deviceId;
+    const devices = await navigator.mediaDevices?.enumerateDevices?.();
+    const active = devices?.find((device) => device.kind === "audioinput" && (!deviceId || device.deviceId === deviceId));
+    const label = `${active?.label || ""} ${track?.label || ""}`;
+    if (/bluetooth|airpods|buds|headset|hands.?free|sco/i.test(label)) {
+      $("#mrMessage").textContent = "블루투스 마이크가 선택되었습니다. 일부 휴대폰은 녹음 중 MR을 통화용 저음질로 바꿉니다. 유선 이어폰 또는 휴대폰 마이크 사용을 권장합니다.";
+    }
+  } catch (_) {}
+}
+
 function updateMrMixerLabels() {
   $("#mrMonitorVolumeValue").textContent = `${$("#mrMonitorVolume").value}%`;
   $("#mrMixVolumeValue").textContent = `${$("#mrMixVolume").value}%`;
@@ -1781,8 +1830,8 @@ function updateMrMixerLabels() {
 
   const now = state.audioContext?.currentTime || 0;
   if (state.mrMonitorGain) state.mrMonitorGain.gain.setTargetAtTime(Number($("#mrMonitorVolume").value) / 100, now, 0.01);
-  if (state.mrRecordGain) state.mrRecordGain.gain.setTargetAtTime(Number($("#mrMixVolume").value) / 100, now, 0.01);
-  if (state.recordingVocalGain) state.recordingVocalGain.gain.setTargetAtTime(Number($("#vocalMixVolume").value) / 100, now, 0.01);
+  if (state.mrRecordGain) state.mrRecordGain.gain.setTargetAtTime(getMrRecordingGainValue(), now, 0.01);
+  if (state.recordingVocalGain) state.recordingVocalGain.gain.setTargetAtTime(getVocalRecordingGainValue(), now, 0.01);
   saveMrSettings();
 }
 
@@ -1797,7 +1846,11 @@ function ensureMrAudioGraph() {
   if (!hasMrFile()) return null;
   const audioContext = ensureAudioContext();
   if (!state.mrSourceNode) {
-    state.mrSourceNode = audioContext.createMediaElementSource($("#mrAudio"));
+    const mrAudio = $("#mrAudio");
+    mrAudio.volume = 1;
+    mrAudio.preload = "auto";
+    mrAudio.playsInline = true;
+    state.mrSourceNode = audioContext.createMediaElementSource(mrAudio);
     state.mrMonitorGain = audioContext.createGain();
     state.mrSourceNode.connect(state.mrMonitorGain);
     state.mrMonitorGain.connect(audioContext.destination);
@@ -1848,6 +1901,9 @@ function handleMrFileSelection(event) {
   if (state.mrObjectUrl) URL.revokeObjectURL(state.mrObjectUrl);
   state.mrObjectUrl = URL.createObjectURL(file);
   audio.src = state.mrObjectUrl;
+  audio.preload = "auto";
+  audio.playsInline = true;
+  audio.volume = 1;
   audio.hidden = false;
   audio.load();
   $("#mrFileName").textContent = file.name;
@@ -1863,6 +1919,7 @@ async function restartMrPlayback() {
   if (!hasMrFile()) return;
   try {
     ensureMrAudioGraph();
+    await waitForMrReady();
     const audio = $("#mrAudio");
     audio.currentTime = 0;
     await audio.play();
@@ -1878,6 +1935,12 @@ function disconnectRecordingMix() {
   }
   if (state.recordingVocalGain) {
     try { state.recordingVocalGain.disconnect(); } catch {}
+  }
+  if (state.recordingVocalCompressor) {
+    try { state.recordingVocalCompressor.disconnect(); } catch {}
+  }
+  if (state.recordingMixBus) {
+    try { state.recordingMixBus.disconnect(); } catch {}
   }
   if (state.mrRecordGain) {
     try { state.mrSourceNode?.disconnect(state.mrRecordGain); } catch {}
@@ -1896,6 +1959,8 @@ function disconnectRecordingMix() {
   }
   state.recordingMixMicSource = null;
   state.recordingVocalGain = null;
+  state.recordingVocalCompressor = null;
+  state.recordingMixBus = null;
   state.mrRecordGain = null;
   state.recordingMixCompressor = null;
   state.recordingMixMasterGain = null;
@@ -1908,34 +1973,51 @@ function createMixedRecordingStream(microphoneStream) {
   const destination = audioContext.createMediaStreamDestination();
   const microphoneSource = audioContext.createMediaStreamSource(microphoneStream);
   const vocalGain = audioContext.createGain();
-  const compressor = audioContext.createDynamicsCompressor();
+  const vocalCompressor = audioContext.createDynamicsCompressor();
+  const mixBus = audioContext.createGain();
   const masterGain = audioContext.createGain();
-  compressor.threshold.value = -12;
-  compressor.knee.value = 18;
-  compressor.ratio.value = 5;
-  compressor.attack.value = 0.003;
-  compressor.release.value = 0.18;
-  masterGain.gain.value = 0.86;
-  compressor.connect(masterGain);
-  masterGain.connect(destination);
-  vocalGain.gain.value = Number($("#vocalMixVolume").value) / 100;
+  const limiter = audioContext.createDynamicsCompressor();
+
+  // 보컬만 가볍게 정리하고 MR은 압축기에서 분리해 반주가 출렁이는 현상을 줄입니다.
+  vocalCompressor.threshold.value = -18;
+  vocalCompressor.knee.value = 12;
+  vocalCompressor.ratio.value = 2.4;
+  vocalCompressor.attack.value = 0.008;
+  vocalCompressor.release.value = 0.16;
+
+  // 최종단은 피크만 막는 소프트 리미터로 사용합니다.
+  limiter.threshold.value = -2;
+  limiter.knee.value = 1;
+  limiter.ratio.value = 16;
+  limiter.attack.value = 0.002;
+  limiter.release.value = 0.07;
+  masterGain.gain.value = 0.9;
+
   microphoneSource.connect(vocalGain);
-  vocalGain.connect(compressor);
+  vocalGain.gain.value = getVocalRecordingGainValue();
+  vocalGain.connect(vocalCompressor);
+  vocalCompressor.connect(mixBus);
 
   let includesMr = false;
   if ($("#includeMrInRecording").checked && hasMrFile()) {
     const mrSource = ensureMrAudioGraph();
     const mrRecordGain = audioContext.createGain();
-    mrRecordGain.gain.value = Number($("#mrMixVolume").value) / 100;
+    mrRecordGain.gain.value = getMrRecordingGainValue();
     mrSource.connect(mrRecordGain);
-    mrRecordGain.connect(compressor);
+    mrRecordGain.connect(mixBus);
     state.mrRecordGain = mrRecordGain;
     includesMr = true;
   }
 
+  mixBus.connect(masterGain);
+  masterGain.connect(limiter);
+  limiter.connect(destination);
+
   state.recordingMixDestination = destination;
   state.recordingMixMicSource = microphoneSource;
-  state.recordingMixCompressor = compressor;
+  state.recordingMixCompressor = limiter;
+  state.recordingVocalCompressor = vocalCompressor;
+  state.recordingMixBus = mixBus;
   state.recordingMixMasterGain = masterGain;
   state.recordingVocalGain = vocalGain;
   state.recordingOutputStream = destination.stream;
@@ -2288,7 +2370,7 @@ function cleanupRecordingStream() {
 async function startRecording() {
   if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") return;
   try {
-    if (location.protocol === "file:") throw new Error("녹음은 훈뮤직툴 실행.bat 또는 HTTPS 주소에서 사용할 수 있습니다.");
+    if (location.protocol === "file:") throw new Error("녹음은 PC에서 훈뮤직툴 실행.bat을 사용하거나, 모바일에서 HTTPS 배포 주소로 열어야 합니다.");
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error("이 브라우저 환경에서는 마이크 녹음을 사용할 수 없습니다.");
     if (!window.MediaRecorder) throw new Error("이 브라우저는 녹음 기능을 지원하지 않습니다. 최신 Chrome 또는 Edge를 사용해 주세요.");
 
@@ -2315,8 +2397,13 @@ async function startRecording() {
     }
 
     state.recordingStream = stream;
+    await warnIfBluetoothMicrophone(stream);
     const recordingAudioContext = ensureAudioContext();
     if (recordingAudioContext.state === "suspended") await recordingAudioContext.resume();
+    if (hasMrFile() && ($("#autoPlayMr").checked || $("#includeMrInRecording").checked)) {
+      ensureMrAudioGraph();
+      await waitForMrReady();
+    }
     const mixed = createMixedRecordingStream(stream);
     const recordingSourceStream = mixed.stream;
     state.currentRecordingMeta = {
@@ -2359,6 +2446,7 @@ async function startRecording() {
       setRecordingBadge("오류", "error");
     });
 
+    if ($("#autoPlayMr").checked && hasMrFile()) $("#mrAudio").currentTime = 0;
     recorder.start(1000);
     setupRecordingLevelMonitor(stream);
     state.recordingTimerId = window.setInterval(updateRecordingTimer, 200);
@@ -2375,6 +2463,7 @@ async function startRecording() {
       try {
         ensureMrAudioGraph();
         const mrAudio = $("#mrAudio");
+        await waitForMrReady();
         mrAudio.currentTime = 0;
         await mrAudio.play();
         state.recordingControlsMr = true;
@@ -2482,30 +2571,192 @@ function setupTabs() {
   });
 }
 
+function isStandaloneMode() {
+  return window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function isIosDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function isAndroidDevice() {
+  return /Android/i.test(navigator.userAgent);
+}
+
+function isMobileDevice() {
+  return isIosDevice() || isAndroidDevice() || window.matchMedia?.("(max-width: 760px)").matches;
+}
+
+function installStep(number, text) {
+  return `<div class="install-step"><strong>${number}</strong><p>${text}</p></div>`;
+}
+
+function renderInstallGuide() {
+  const content = $("#installGuideContent");
+  const nativeButton = $("#nativeInstallBtn");
+  const secureOnline = window.isSecureContext && location.protocol !== "file:";
+  nativeButton.hidden = !state.deferredInstallPrompt;
+
+  if (isStandaloneMode()) {
+    content.innerHTML = `<p class="install-note">훈뮤직툴이 이미 홈 화면 앱으로 실행되고 있습니다.</p>`;
+    nativeButton.hidden = true;
+    return;
+  }
+
+  if (!secureOnline) {
+    content.innerHTML = [
+      `<p class="install-note">모바일에서 마이크·녹음·홈 화면 설치까지 사용하려면 이 폴더를 GitHub Pages 또는 Netlify에 올려 HTTPS 주소로 열어야 합니다.</p>`,
+      installStep(1, "배포용 폴더의 파일을 GitHub Pages 또는 Netlify에 업로드합니다."),
+      installStep(2, "생성된 https:// 주소를 스마트폰 Chrome 또는 Safari에서 엽니다."),
+      installStep(3, "상단의 설치 버튼을 누르거나 브라우저 메뉴에서 홈 화면에 추가합니다.")
+    ].join("");
+    nativeButton.hidden = true;
+    return;
+  }
+
+  if (state.deferredInstallPrompt) {
+    content.innerHTML = [
+      `<p class="install-note">아래 버튼을 누르면 훈뮤직툴이 홈 화면에 설치됩니다.</p>`,
+      installStep(1, "지금 설치를 누릅니다."),
+      installStep(2, "설치 확인 창에서 설치를 선택합니다."),
+      installStep(3, "다음부터는 홈 화면의 훈뮤직툴 아이콘으로 바로 실행합니다.")
+    ].join("");
+    nativeButton.hidden = false;
+    return;
+  }
+
+  if (isIosDevice()) {
+    content.innerHTML = [
+      installStep(1, "Safari 아래쪽의 공유 버튼(□ 위쪽 화살표)을 누릅니다."),
+      installStep(2, "메뉴에서 ‘홈 화면에 추가’를 선택합니다."),
+      installStep(3, "오른쪽 위 ‘추가’를 누르면 홈 화면에 아이콘이 생깁니다.")
+    ].join("");
+  } else {
+    content.innerHTML = [
+      installStep(1, "브라우저 오른쪽 위의 점 3개 메뉴를 누릅니다."),
+      installStep(2, "‘앱 설치’ 또는 ‘홈 화면에 추가’를 선택합니다."),
+      installStep(3, "추가 또는 설치를 누르면 홈 화면에서 바로 실행할 수 있습니다.")
+    ].join("");
+  }
+}
+
+function openInstallSheet() {
+  renderInstallGuide();
+  $("#installSheet").hidden = false;
+  document.body.style.overflow = "hidden";
+  window.setTimeout(() => $("#closeInstallSheet")?.focus(), 0);
+}
+
+function closeInstallSheet() {
+  $("#installSheet").hidden = true;
+  document.body.style.overflow = "";
+}
+
+async function triggerNativeInstall() {
+  if (!state.deferredInstallPrompt) {
+    renderInstallGuide();
+    return;
+  }
+  state.deferredInstallPrompt.prompt();
+  await state.deferredInstallPrompt.userChoice;
+  state.deferredInstallPrompt = null;
+  $("#nativeInstallBtn").hidden = true;
+  closeInstallSheet();
+  updateMobileInstallUi();
+}
+
+async function shareAppAddress() {
+  const button = $("#shareBtn");
+  const original = button.textContent;
+  if (location.protocol === "file:") {
+    openInstallSheet();
+    return;
+  }
+  const data = {
+    title: "훈뮤직툴",
+    text: "코드 진행·보컬튠·MR 녹음·메트로놈·튜너",
+    url: location.href.split("#")[0]
+  };
+  try {
+    if (navigator.share) {
+      await navigator.share(data);
+    } else {
+      await navigator.clipboard.writeText(data.url);
+      button.textContent = "복사됨";
+      window.setTimeout(() => { button.textContent = original; }, 1400);
+    }
+  } catch (error) {
+    if (error?.name !== "AbortError") {
+      try {
+        await navigator.clipboard.writeText(data.url);
+        button.textContent = "복사됨";
+        window.setTimeout(() => { button.textContent = original; }, 1400);
+      } catch (_) {
+        button.textContent = "실패";
+        window.setTimeout(() => { button.textContent = original; }, 1400);
+      }
+    }
+  }
+}
+
+function updateMobileInstallUi() {
+  const installed = isStandaloneMode();
+  const installButton = $("#installBtn");
+  installButton.hidden = installed;
+  installButton.disabled = installed;
+  installButton.textContent = state.deferredInstallPrompt ? "설치" : "설치안내";
+  $("#mobileReadyBanner").hidden = installed || !isMobileDevice();
+}
+
+function showUpdateToast() {
+  if (document.querySelector(".update-toast")) return;
+  const toast = document.createElement("div");
+  toast.className = "update-toast";
+  toast.innerHTML = `<span>새 버전을 사용할 수 있습니다.</span><button type="button">업데이트</button>`;
+  toast.querySelector("button").addEventListener("click", () => location.reload());
+  document.body.appendChild(toast);
+}
+
 function setupPwaInstall() {
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     state.deferredInstallPrompt = event;
-    $("#installBtn").hidden = false;
+    updateMobileInstallUi();
+    if (!$("#installSheet").hidden) renderInstallGuide();
   });
 
-  $("#installBtn").addEventListener("click", async () => {
-    if (!state.deferredInstallPrompt) return;
-    state.deferredInstallPrompt.prompt();
-    await state.deferredInstallPrompt.userChoice;
-    state.deferredInstallPrompt = null;
-    $("#installBtn").hidden = true;
+  $("#installBtn").addEventListener("click", openInstallSheet);
+  $("#mobileGuideBtn").addEventListener("click", openInstallSheet);
+  $("#closeInstallSheet").addEventListener("click", closeInstallSheet);
+  $("#installSheetBackdrop").addEventListener("click", closeInstallSheet);
+  $("#nativeInstallBtn").addEventListener("click", triggerNativeInstall);
+  $("#shareBtn").addEventListener("click", shareAppAddress);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !$("#installSheet").hidden) closeInstallSheet();
   });
 
   window.addEventListener("appinstalled", () => {
-    $("#installBtn").hidden = true;
+    state.deferredInstallPrompt = null;
+    closeInstallSheet();
+    updateMobileInstallUi();
   });
+
+  window.matchMedia?.("(display-mode: standalone)").addEventListener?.("change", updateMobileInstallUi);
+  updateMobileInstallUi();
 }
 
 function registerServiceWorker() {
-  if ("serviceWorker" in navigator && location.protocol !== "file:") {
-    navigator.serviceWorker.register("./sw.js").catch((error) => console.warn("Service worker registration failed", error));
-  }
+  if (!("serviceWorker" in navigator) || location.protocol === "file:") return;
+  navigator.serviceWorker.register("./sw.js").then((registration) => {
+    registration.update().catch(() => {});
+    registration.addEventListener("updatefound", () => {
+      const worker = registration.installing;
+      if (!worker) return;
+      worker.addEventListener("statechange", () => {
+        if (worker.state === "installed" && navigator.serviceWorker.controller) showUpdateToast();
+      });
+    });
+  }).catch((error) => console.warn("Service worker registration failed", error));
 }
 
 function bindEvents() {

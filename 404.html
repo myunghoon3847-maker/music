@@ -312,7 +312,7 @@
                 <span>MP3·WAV·M4A 등 기기에 저장된 반주 파일을 불러올 수 있습니다.</span>
               </div>
 
-              <audio id="mrAudio" class="mr-audio" controls preload="auto" playsinline hidden></audio>
+              <audio id="mrAudio" class="mr-audio" controls preload="metadata" hidden></audio>
 
               <div class="mr-action-row">
                 <button id="restartMr" class="secondary-btn" type="button" disabled>처음부터</button>
@@ -339,7 +339,7 @@
                 <label><input id="includeMrInRecording" type="checkbox" checked /> 저장 파일에 MR과 보컬을 함께 녹음</label>
                 <label><input id="autoStopOnMrEnd" type="checkbox" checked /> MR이 끝나면 녹음을 자동 저장</label>
               </div>
-              <p id="mrMessage" class="helper mr-message">MR이 먹먹하거나 끊기면 블루투스 이어폰 대신 유선 이어폰을 사용하고, 녹음 속 MR 55~75%·보컬 80~110%부터 맞춰 보세요.</p>
+              <p id="mrMessage" class="helper mr-message">이어폰을 사용하면 반주가 마이크에 다시 들어가 생기는 울림을 줄일 수 있습니다.</p>
             </div>
 
             <label class="recording-name-field">
