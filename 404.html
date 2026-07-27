@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="훈뮤직툴" />
   <meta name="format-detection" content="telephone=no" />
-  <meta name="description" content="코드 진행·메트로놈·튜너·보컬 음정 연습과 MR 반주 합성 녹음을 한곳에서 사용하는 개인용 음악 제작 도구" />
+  <meta name="description" content="코드 진행·보컬 음정 연습·MR 녹음·메트로놈·튜너를 탭별로 사용하는 개인용 음악 제작 도구" />
   <title>훈뮤직툴</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
@@ -40,6 +40,7 @@
     <nav class="tabs" aria-label="주요 기능">
       <button class="tab is-active" data-tab="chords" aria-selected="true">코드</button>
       <button class="tab" data-tab="vocalTune" aria-selected="false">보컬튠</button>
+      <button class="tab" data-tab="recording" aria-selected="false">녹음</button>
       <button class="tab" data-tab="metronome" aria-selected="false">메트로놈</button>
       <button class="tab" data-tab="tuner" aria-selected="false">튜너</button>
     </nav>
@@ -285,15 +286,22 @@
           <button id="resetVocalPractice" class="text-reset-btn" type="button">연습 기록 초기화</button>
           <p id="vocalMessage" class="helper vocal-message">이어폰 없이 마이크 모니터링 소리를 내보내면 하울링이 생길 수 있어, 이번 버전은 음정을 화면으로 안내합니다.</p>
 
-          <section class="recorder-panel" aria-labelledby="recorder-title">
-            <div class="recorder-heading">
-              <div>
-                <p class="section-kicker">MR RECORDING STUDIO</p>
-                <h3 id="recorder-title">MR 보컬 녹음</h3>
-              </div>
-              <span id="recordingStatusBadge" class="recording-status-badge">준비</span>
-            </div>
+          <p class="privacy-note">보컬튠 분석은 기기 안에서만 처리되며 외부로 전송하지 않습니다.</p>
 
+        </div>
+      </section>
+
+
+      <section id="recording" class="panel" aria-labelledby="recording-page-title">
+        <div class="card recording-card">
+          <div class="section-heading recording-page-heading">
+            <div>
+              <p class="section-kicker">RECORDING STUDIO</p>
+              <h2 id="recording-page-title">녹음</h2>
+            </div>
+            <span id="recordingStatusBadge" class="recording-status-badge">준비</span>
+          </div>
+          <section class="recorder-panel" aria-labelledby="recording-page-title">
             <div class="mr-studio" aria-labelledby="mr-studio-title">
               <div class="mr-studio-heading">
                 <div>
@@ -366,10 +374,16 @@
               <p id="mrMessage" class="helper mr-message">싱크 값은 기기에 자동 저장됩니다.</p>
             </div>
 
-            <label class="recording-name-field">
-              <span>녹음 이름</span>
-              <input id="recordingName" type="text" maxlength="40" placeholder="예: 후렴 MR 녹음 1" autocomplete="off" />
-            </label>
+            <div class="recording-entry-fields">
+              <label class="recording-name-field">
+                <span>녹음 제목</span>
+                <input id="recordingName" type="text" maxlength="60" placeholder="예: 후렴 MR 녹음 1" autocomplete="off" />
+              </label>
+              <label class="recording-memo-field">
+                <span>메모 <small>선택</small></span>
+                <textarea id="recordingMemo" maxlength="500" rows="3" placeholder="연습 구간, 느낀 점, 다시 확인할 부분"></textarea>
+              </label>
+            </div>
 
             <div id="recordingCountdown" class="recording-countdown" aria-live="assertive" hidden>3</div>
 
@@ -398,7 +412,8 @@
             <p id="recordingMessage" class="helper recording-message">MR과 보컬이 합쳐진 녹음 파일은 이 브라우저의 기기 저장 공간에만 보관됩니다.</p>
           </section>
 
-          <p class="privacy-note">보컬튠 분석, 선택한 MR, 녹음 파일은 기기 안에서만 처리되며 외부로 전송하지 않습니다.</p>
+
+          <p class="privacy-note">선택한 MR과 녹음 파일은 기기 안에서만 처리되며 외부로 전송하지 않습니다.</p>
         </div>
       </section>
 
@@ -549,7 +564,7 @@
     </main>
 
     <footer>
-      <p>브라우저에서 실행되는 개인용 음악 제작 도구 · v1.6.4 플레이어·UI 개선</p>
+      <p>브라우저에서 실행되는 개인용 음악 제작 도구 · v1.6.5 보컬튠·녹음 분리</p>
     </footer>
   </div>
 

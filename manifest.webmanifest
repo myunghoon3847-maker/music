@@ -1,17 +1,25 @@
 {
   "id": "./",
-  "name": "훈뮤직툴 - 코드·보컬튠·MR 녹음·메트로놈·튜너",
+  "name": "훈뮤직툴 - 코드·보컬튠·녹음실·메트로놈·튜너",
   "short_name": "훈뮤직툴",
-  "description": "코드 진행 생성, 보컬 음정 연습, MR 반주와 보컬 싱크 보정 녹음·전용 플레이어, 메트로놈, 악기 튜너를 제공하는 개인용 음악 도구",
+  "description": "코드 진행 생성, 보컬 음정 연습, 별도 MR 녹음실, 녹음 제목·메모 관리, 메트로놈과 악기 튜너를 제공하는 개인용 음악 도구",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui", "browser"],
+  "display_override": [
+    "standalone",
+    "minimal-ui",
+    "browser"
+  ],
   "orientation": "portrait-primary",
   "background_color": "#f4f5fb",
   "theme_color": "#5b5bd6",
   "lang": "ko-KR",
-  "categories": ["music", "utilities", "productivity"],
+  "categories": [
+    "music",
+    "utilities",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "icons/icon-192.png",

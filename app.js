@@ -2392,6 +2392,16 @@ async function addStoredRecording(recording) {
   });
 }
 
+async function putStoredRecording(recording) {
+  const db = await openRecordingDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(RECORDING_STORE_NAME, "readwrite");
+    const request = transaction.objectStore(RECORDING_STORE_NAME).put(recording);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("녹음 정보를 수정하지 못했습니다."));
+  });
+}
+
 async function deleteStoredRecording(id) {
   const db = await openRecordingDb();
   return new Promise((resolve, reject) => {
@@ -2577,7 +2587,7 @@ function renderRecordings() {
   if (!sorted.length) {
     const empty = document.createElement("div");
     empty.className = "recording-empty";
-    empty.innerHTML = "<strong>저장된 녹음이 없습니다.</strong><span>녹음이 끝나면 이곳에서 바로 재생할 수 있습니다.</span>";
+    empty.innerHTML = "<strong>저장된 녹음이 없습니다.</strong><span>녹음이 끝나면 제목과 메모를 남길 수 있습니다.</span>";
     list.appendChild(empty);
     return;
   }
@@ -2589,20 +2599,30 @@ function renderRecordings() {
     const header = document.createElement("div");
     header.className = "recording-item-header";
     const titleWrap = document.createElement("div");
+    titleWrap.className = "recording-title-wrap";
+    const titleLine = document.createElement("div");
+    titleLine.className = "recording-title-line";
     const title = document.createElement("strong");
     title.textContent = recording.name || "보컬 녹음";
+    titleLine.appendChild(title);
     if (recording.hasMr) {
       const tag = document.createElement("span");
       tag.className = "recording-mr-tag";
       tag.textContent = "MR 포함";
-      title.appendChild(tag);
+      titleLine.appendChild(tag);
     }
     const meta = document.createElement("span");
     const created = new Date(recording.createdAt);
     const syncText = recording.hasMr && Number(recording.syncOffsetMs) ? ` · 싱크 ${formatSignedMilliseconds(recording.syncOffsetMs)}` : "";
     meta.textContent = `${created.toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })} · ${formatRecordingDuration(recording.durationMs)} · ${formatFileSize(recording.blob?.size || 0)}${syncText}`;
-    titleWrap.append(title, meta);
+    titleWrap.append(titleLine, meta);
     header.appendChild(titleWrap);
+
+    const memoText = String(recording.memo || "").trim();
+    const memo = document.createElement("p");
+    memo.className = "recording-note";
+    memo.textContent = memoText;
+    memo.hidden = !memoText;
 
     const objectUrl = URL.createObjectURL(recording.blob);
     state.recordingObjectUrls.push(objectUrl);
@@ -2610,10 +2630,16 @@ function renderRecordings() {
 
     const actions = document.createElement("div");
     actions.className = "recording-item-actions";
+
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.className = "recording-small-btn";
+    editButton.textContent = "수정";
+
     const downloadButton = document.createElement("button");
     downloadButton.type = "button";
     downloadButton.className = "recording-small-btn";
-    downloadButton.textContent = "저장";
+    downloadButton.textContent = "파일 저장";
     downloadButton.addEventListener("click", () => {
       const link = document.createElement("a");
       link.href = objectUrl;
@@ -2631,10 +2657,10 @@ function renderRecordings() {
       if (!confirm(`‘${recording.name || "보컬 녹음"}’ 녹음을 삭제할까요?`)) return;
       try {
         if (recording.volatile) {
-          state.recordings = state.recordings.filter((item) => item.id !== recording.id);
+          state.recordings = state.recordings.filter((entry) => entry.id !== recording.id);
         } else {
           await deleteStoredRecording(recording.id);
-          state.recordings = state.recordings.filter((item) => item.id !== recording.id);
+          state.recordings = state.recordings.filter((entry) => entry.id !== recording.id);
         }
         renderRecordings();
         $("#recordingMessage").textContent = "녹음 파일을 삭제했습니다.";
@@ -2643,8 +2669,78 @@ function renderRecordings() {
       }
     });
 
-    actions.append(downloadButton, deleteButton);
-    item.append(header, player, actions);
+    const editor = document.createElement("div");
+    editor.className = "recording-editor";
+    editor.hidden = true;
+
+    const nameLabel = document.createElement("label");
+    nameLabel.innerHTML = "<span>제목</span>";
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.maxLength = 60;
+    nameInput.value = recording.name || "보컬 녹음";
+    nameLabel.appendChild(nameInput);
+
+    const memoLabel = document.createElement("label");
+    memoLabel.innerHTML = "<span>메모</span>";
+    const memoInput = document.createElement("textarea");
+    memoInput.rows = 4;
+    memoInput.maxLength = 500;
+    memoInput.placeholder = "연습 구간, 느낀 점, 다시 녹음할 부분";
+    memoInput.value = memoText;
+    memoLabel.appendChild(memoInput);
+
+    const editorActions = document.createElement("div");
+    editorActions.className = "recording-editor-actions";
+    const cancelEdit = document.createElement("button");
+    cancelEdit.type = "button";
+    cancelEdit.className = "secondary-btn";
+    cancelEdit.textContent = "취소";
+    const saveEdit = document.createElement("button");
+    saveEdit.type = "button";
+    saveEdit.className = "primary-btn";
+    saveEdit.textContent = "저장";
+    editorActions.append(cancelEdit, saveEdit);
+    editor.append(nameLabel, memoLabel, editorActions);
+
+    const closeEditor = () => {
+      editor.hidden = true;
+      editButton.textContent = "수정";
+      nameInput.value = recording.name || "보컬 녹음";
+      memoInput.value = String(recording.memo || "");
+    };
+
+    editButton.addEventListener("click", () => {
+      const opening = editor.hidden;
+      if (opening) {
+        editor.hidden = false;
+        editButton.textContent = "닫기";
+        window.setTimeout(() => nameInput.focus(), 0);
+      } else {
+        closeEditor();
+      }
+    });
+    cancelEdit.addEventListener("click", closeEditor);
+    saveEdit.addEventListener("click", async () => {
+      const nextName = nameInput.value.trim().slice(0, 60) || "보컬 녹음";
+      const nextMemo = memoInput.value.trim().slice(0, 500);
+      const updated = { ...recording, name: nextName, memo: nextMemo, updatedAt: Date.now() };
+      saveEdit.disabled = true;
+      saveEdit.textContent = "저장 중";
+      try {
+        if (!recording.volatile) await putStoredRecording(updated);
+        state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+        renderRecordings();
+        $("#recordingMessage").textContent = "녹음 제목과 메모를 수정했습니다.";
+      } catch (error) {
+        saveEdit.disabled = false;
+        saveEdit.textContent = "저장";
+        $("#recordingMessage").textContent = error.message;
+      }
+    });
+
+    actions.append(editButton, downloadButton, deleteButton);
+    item.append(header, memo, player, actions, editor);
     list.appendChild(item);
   });
 }
@@ -2768,6 +2864,7 @@ function resetRecordingControls() {
   $("#pauseRecording").textContent = "일시정지";
   $("#stopRecording").disabled = true;
   $("#recordingName").disabled = false;
+  $("#recordingMemo").disabled = false;
   updateRecordingIdleText();
   setRecordingBadge("준비");
   setMrRecordingLocked(false);
@@ -2776,9 +2873,11 @@ function resetRecordingControls() {
 
 async function finishRecording(blob, durationMs, mimeType) {
   const name = $("#recordingName").value.trim() || defaultRecordingName();
+  const memo = $("#recordingMemo").value.trim().slice(0, 500);
   const meta = state.currentRecordingMeta || {};
   const record = {
     name,
+    memo,
     createdAt: Date.now(),
     durationMs,
     mimeType: mimeType || blob.type || "audio/webm",
@@ -2796,6 +2895,7 @@ async function finishRecording(blob, durationMs, mimeType) {
     $("#recordingMessage").textContent = `${error.message} 녹음은 현재 화면에서 임시로 재생·파일 저장할 수 있습니다.`;
   }
   $("#recordingName").value = "";
+  $("#recordingMemo").value = "";
   renderRecordings();
 }
 
@@ -2922,6 +3022,7 @@ async function startRecording() {
     $("#pauseRecording").disabled = true;
     $("#stopRecording").disabled = true;
     $("#recordingName").disabled = true;
+    $("#recordingMemo").disabled = true;
     setRecordingBadge(countInSeconds ? "카운트인" : "시작 준비", "saving");
 
     if (shouldUseMr && state.mrAudioBuffer) {
@@ -3091,7 +3192,7 @@ function setupTabs() {
   $$(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
       const target = tab.dataset.tab;
-      if (target !== "vocalTune" && state.mediaRecorder && state.mediaRecorder.state !== "inactive") stopRecording();
+      if (target !== "recording" && state.mediaRecorder && state.mediaRecorder.state !== "inactive") stopRecording();
       stopMetronome();
       stopProgression();
       stopTuner();
@@ -3209,7 +3310,7 @@ async function shareAppAddress() {
   }
   const data = {
     title: "훈뮤직툴",
-    text: "코드 진행·보컬튠·MR 녹음·메트로놈·튜너",
+    text: "코드 진행·보컬튠·녹음실·메트로놈·튜너",
     url: location.href.split("#")[0]
   };
   try {

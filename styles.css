@@ -1804,3 +1804,76 @@ input, select, textarea { font-size: 16px; }
   .mr-advanced-content .mr-mixer-grid { grid-template-columns: 1fr; }
 }
 .recording-player audio[hidden] { display: none !important; }
+
+
+/* v1.6.5 보컬튠·녹음 분리 / 녹음 정보 편집 */
+.tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.recording-card { overflow: hidden; }
+.recording-page-heading { margin-bottom: 14px; }
+.recording-card > .recorder-panel { margin-top: 0; }
+.recording-entry-fields { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 10px; margin: 12px 0; }
+.recording-entry-fields label { min-width: 0; }
+.recording-entry-fields small { color: var(--muted); font-size: 0.65rem; font-weight: 700; }
+.recording-entry-fields input,
+.recording-entry-fields textarea,
+.recording-editor input,
+.recording-editor textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  color: var(--text);
+  background: #fafaff;
+  outline: none;
+  font: inherit;
+}
+.recording-entry-fields input,
+.recording-editor input { min-height: 46px; padding: 0 13px; }
+.recording-entry-fields textarea,
+.recording-editor textarea { min-height: 72px; padding: 11px 13px; line-height: 1.5; resize: vertical; }
+.recording-entry-fields input:focus,
+.recording-entry-fields textarea:focus,
+.recording-editor input:focus,
+.recording-editor textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.recording-title-line { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.recording-title-line .recording-mr-tag { margin: 0; }
+.recording-note {
+  margin: 0 0 9px;
+  padding: 9px 11px;
+  border-radius: 11px;
+  color: var(--text);
+  background: rgba(91,91,214,0.065);
+  font-size: 0.72rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.recording-item-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.recording-editor {
+  margin-top: 10px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #fff;
+}
+.recording-editor[hidden] { display: none; }
+.recording-editor label + label { display: block; margin-top: 9px; }
+.recording-editor label > span { margin-bottom: 6px; font-size: 0.72rem; }
+.recording-editor-actions { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 8px; margin-top: 10px; }
+.recording-editor-actions .primary-btn,
+.recording-editor-actions .secondary-btn { min-height: 42px; border-radius: 12px; }
+@media (max-width: 680px) {
+  .tabs { grid-template-columns: repeat(5, minmax(68px, 1fr)); }
+  .recording-entry-fields { grid-template-columns: 1fr; }
+  .recording-card { padding-inline: 12px; }
+}
+
+/* v1.6.5 간결한 녹음 화면 */
+.recording-card > .recorder-panel {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.recording-page-heading .recording-status-badge { flex: 0 0 auto; }
+
+.recording-item-actions { display: grid; }
