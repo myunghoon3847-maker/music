@@ -334,18 +334,36 @@
                 </label>
               </div>
 
+              <div class="mr-sync-panel" aria-labelledby="mr-sync-title">
+                <div class="mr-sync-heading">
+                  <strong id="mr-sync-title">녹음 싱크 보정</strong>
+                  <output id="mrSyncOffsetValue">+120ms</output>
+                </div>
+                <input id="mrSyncOffset" class="range compact" type="range" min="-300" max="500" step="10" value="120" />
+                <div class="mr-sync-scale"><span>보컬이 빠를 때 −</span><span>보컬이 늦을 때 +</span></div>
+                <div class="mr-sync-actions">
+                  <button id="mrSyncMinus" class="secondary-btn" type="button">−10ms</button>
+                  <button id="mrSyncReset" class="secondary-btn" type="button">기본값</button>
+                  <button id="mrSyncPlus" class="secondary-btn" type="button">+10ms</button>
+                </div>
+                <p>녹음 결과에서 보컬이 MR보다 늦게 들리면 + 방향으로, 빠르게 들리면 − 방향으로 조절합니다. 듣는 MR에는 지연이 적용되지 않습니다.</p>
+              </div>
+
               <div class="mr-options">
                 <label><input id="autoPlayMr" type="checkbox" checked /> 녹음 시작 시 MR을 처음부터 자동 재생</label>
                 <label><input id="includeMrInRecording" type="checkbox" checked /> 저장 파일에 MR과 보컬을 함께 녹음</label>
                 <label><input id="autoStopOnMrEnd" type="checkbox" checked /> MR이 끝나면 녹음을 자동 저장</label>
+                <label><input id="recordingCountIn" type="checkbox" checked /> 시작 전에 3초 카운트인 재생</label>
               </div>
-              <p id="mrMessage" class="helper mr-message">MR이 먹먹하거나 끊기면 블루투스 이어폰 대신 유선 이어폰을 사용하고, 녹음 속 MR 55~75%·보컬 80~110%부터 맞춰 보세요.</p>
+              <p id="mrMessage" class="helper mr-message">기본 싱크 보정은 +120ms입니다. 유선 이어폰으로 짧게 녹음한 뒤 ±10ms 버튼으로 맞추면 기기에 저장됩니다.</p>
             </div>
 
             <label class="recording-name-field">
               <span>녹음 이름</span>
               <input id="recordingName" type="text" maxlength="40" placeholder="예: 후렴 MR 녹음 1" autocomplete="off" />
             </label>
+
+            <div id="recordingCountdown" class="recording-countdown" aria-live="assertive" hidden>3</div>
 
             <div class="recording-monitor" aria-live="polite">
               <strong id="recordingTimer">00:00</strong>
@@ -523,7 +541,7 @@
     </main>
 
     <footer>
-      <p>브라우저에서 실행되는 개인용 음악 제작 도구 · v1.6.2 모바일</p>
+      <p>브라우저에서 실행되는 개인용 음악 제작 도구 · v1.6.3 싱크 안정화</p>
     </footer>
   </div>
 

@@ -69,18 +69,39 @@ const state = {
   recordingObjectUrls: [],
   recordingDbPromise: null,
   mrObjectUrl: null,
+  mrFile: null,
+  mrAudioBuffer: null,
+  mrDecodePromise: null,
+  mrDecodeToken: 0,
   mrSourceNode: null,
   mrMonitorGain: null,
   mrRecordGain: null,
+  mrRecordDelay: null,
+  mrPlaybackSource: null,
+  mrPlaybackStartAt: 0,
+  mrPlaybackOffsetSec: 0,
+  mrPlaybackScheduledOffsetSec: 0,
+  mrPlaybackSessionId: 0,
+  mrAutoStopTimer: null,
   recordingVocalGain: null,
   recordingVocalCompressor: null,
+  recordingVocalDelay: null,
   recordingMixBus: null,
   recordingMixDestination: null,
   recordingMixMicSource: null,
   recordingMixCompressor: null,
   recordingMixMasterGain: null,
+  recordingGate: null,
   recordingOutputStream: null,
   recordingControlsMr: false,
+  recordingStarting: false,
+  recordingStopping: false,
+  recordingStartTimeout: null,
+  recordingStopTimeout: null,
+  recordingUiStartTimeout: null,
+  recordingCountdownFrame: null,
+  recordingCountdownNodes: [],
+  recordingSessionToken: 0,
   mrResumeAfterPause: false,
   currentRecordingMeta: null
 };
@@ -89,6 +110,11 @@ const NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", 
 const RECORDING_DB_NAME = "hoonMusicRecordingsDB";
 const RECORDING_STORE_NAME = "recordings";
 const MAX_RECORDING_MS = 30 * 60 * 1000;
+const DEFAULT_MR_SYNC_MS = 120;
+const MIN_MR_SYNC_MS = -300;
+const MAX_MR_SYNC_MS = 500;
+const RECORDING_PREROLL_MS = 180;
+const RECORDING_RESUME_LEAD_MS = 45;
 const FLAT_TO_SHARP = { Eb: "D#", Ab: "G#", Bb: "A#" };
 const DISPLAY_FLATS = new Set(["Eb", "Ab", "Bb"]);
 const TUNING_PRESETS = {
@@ -984,7 +1010,10 @@ function loadSettings() {
   $("#autoPlayMr").checked = localStorage.getItem("hoonMusicAutoPlayMr") !== "0";
   $("#includeMrInRecording").checked = localStorage.getItem("hoonMusicIncludeMr") !== "0";
   $("#autoStopOnMrEnd").checked = localStorage.getItem("hoonMusicAutoStopMr") !== "0";
+  $("#recordingCountIn").checked = localStorage.getItem("hoonMusicRecordingCountIn") !== "0";
+  $("#mrSyncOffset").value = String(clamp(Number(localStorage.getItem("hoonMusicMrSyncOffset") ?? DEFAULT_MR_SYNC_MS), MIN_MR_SYNC_MS, MAX_MR_SYNC_MS));
   updateMrMixerLabels();
+  updateMrSyncControls();
 }
 
 
@@ -1763,6 +1792,64 @@ function formatMrDuration(seconds) {
   return formatRecordingDuration(seconds * 1000);
 }
 
+
+function formatSignedMilliseconds(value) {
+  const milliseconds = Math.round(Number(value) || 0);
+  if (milliseconds === 0) return "0ms";
+  return `${milliseconds > 0 ? "+" : ""}${milliseconds}ms`;
+}
+
+function getMrSyncOffsetMs() {
+  return clamp(Math.round(Number($("#mrSyncOffset")?.value) || 0), MIN_MR_SYNC_MS, MAX_MR_SYNC_MS);
+}
+
+function updateMrSyncControls() {
+  const value = getMrSyncOffsetMs();
+  $("#mrSyncOffset").value = String(value);
+  $("#mrSyncOffsetValue").textContent = formatSignedMilliseconds(value);
+  const context = state.audioContext;
+  const now = context?.currentTime || 0;
+  if (state.mrRecordDelay) state.mrRecordDelay.delayTime.setTargetAtTime(Math.max(0, value) / 1000, now, 0.01);
+  if (state.recordingVocalDelay) state.recordingVocalDelay.delayTime.setTargetAtTime(Math.max(0, -value) / 1000, now, 0.01);
+  localStorage.setItem("hoonMusicMrSyncOffset", String(value));
+}
+
+function adjustMrSyncOffset(delta) {
+  $("#mrSyncOffset").value = String(clamp(getMrSyncOffsetMs() + Number(delta || 0), MIN_MR_SYNC_MS, MAX_MR_SYNC_MS));
+  updateMrSyncControls();
+}
+
+function resetMrSyncOffset() {
+  $("#mrSyncOffset").value = String(DEFAULT_MR_SYNC_MS);
+  updateMrSyncControls();
+  $("#mrMessage").textContent = "기본 보정값 +120ms로 되돌렸습니다. 보컬이 여전히 늦으면 +10ms씩 올려 보세요.";
+}
+
+function getRecordingCountInSeconds() {
+  return $("#recordingCountIn")?.checked ? 3 : 0;
+}
+
+function getRecordingSyncTailMs() {
+  return Math.abs(getMrSyncOffsetMs()) + 180;
+}
+
+async function decodeMrFile(file, token) {
+  const context = ensureAudioContext();
+  const encoded = await file.arrayBuffer();
+  const buffer = await context.decodeAudioData(encoded.slice(0));
+  if (token !== state.mrDecodeToken) throw new DOMException("MR 불러오기가 취소되었습니다.", "AbortError");
+  if (!buffer?.duration || !Number.isFinite(buffer.duration)) throw new Error("MR 파일의 재생 시간을 확인하지 못했습니다.");
+  state.mrAudioBuffer = buffer;
+  return buffer;
+}
+
+async function waitForMrBufferReady() {
+  if (!hasMrFile()) return null;
+  if (state.mrAudioBuffer) return state.mrAudioBuffer;
+  if (state.mrDecodePromise) return state.mrDecodePromise;
+  throw new Error("MR 파일을 아직 분석하지 못했습니다. 파일을 다시 선택해 주세요.");
+}
+
 function hasMrFile() {
   const audio = $("#mrAudio");
   return Boolean(audio?.src && state.mrObjectUrl);
@@ -1775,6 +1862,8 @@ function saveMrSettings() {
   localStorage.setItem("hoonMusicAutoPlayMr", $("#autoPlayMr").checked ? "1" : "0");
   localStorage.setItem("hoonMusicIncludeMr", $("#includeMrInRecording").checked ? "1" : "0");
   localStorage.setItem("hoonMusicAutoStopMr", $("#autoStopOnMrEnd").checked ? "1" : "0");
+  localStorage.setItem("hoonMusicRecordingCountIn", $("#recordingCountIn").checked ? "1" : "0");
+  localStorage.setItem("hoonMusicMrSyncOffset", String(getMrSyncOffsetMs()));
 }
 
 function getMrRecordingGainValue() {
@@ -1832,6 +1921,7 @@ function updateMrMixerLabels() {
   if (state.mrMonitorGain) state.mrMonitorGain.gain.setTargetAtTime(Number($("#mrMonitorVolume").value) / 100, now, 0.01);
   if (state.mrRecordGain) state.mrRecordGain.gain.setTargetAtTime(getMrRecordingGainValue(), now, 0.01);
   if (state.recordingVocalGain) state.recordingVocalGain.gain.setTargetAtTime(getVocalRecordingGainValue(), now, 0.01);
+  updateMrSyncControls();
   saveMrSettings();
 }
 
@@ -1842,20 +1932,28 @@ function updateRecordingIdleText() {
     : "MR을 선택하지 않아도 보컬만 녹음할 수 있습니다.";
 }
 
+function ensureMrMonitorGain() {
+  const audioContext = ensureAudioContext();
+  if (!state.mrMonitorGain) {
+    state.mrMonitorGain = audioContext.createGain();
+    state.mrMonitorGain.connect(audioContext.destination);
+  }
+  state.mrMonitorGain.gain.setTargetAtTime(Number($("#mrMonitorVolume").value) / 100, audioContext.currentTime, 0.01);
+  return state.mrMonitorGain;
+}
+
 function ensureMrAudioGraph() {
   if (!hasMrFile()) return null;
   const audioContext = ensureAudioContext();
+  const monitorGain = ensureMrMonitorGain();
   if (!state.mrSourceNode) {
     const mrAudio = $("#mrAudio");
     mrAudio.volume = 1;
     mrAudio.preload = "auto";
     mrAudio.playsInline = true;
     state.mrSourceNode = audioContext.createMediaElementSource(mrAudio);
-    state.mrMonitorGain = audioContext.createGain();
-    state.mrSourceNode.connect(state.mrMonitorGain);
-    state.mrMonitorGain.connect(audioContext.destination);
+    state.mrSourceNode.connect(monitorGain);
   }
-  state.mrMonitorGain.gain.setTargetAtTime(Number($("#mrMonitorVolume").value) / 100, audioContext.currentTime, 0.01);
   return state.mrSourceNode;
 }
 
@@ -1866,11 +1964,17 @@ function setMrRecordingLocked(locked) {
   $("#autoPlayMr").disabled = locked;
   $("#includeMrInRecording").disabled = locked;
   $("#autoStopOnMrEnd").disabled = locked;
+  $("#recordingCountIn").disabled = locked;
+  $("#mrSyncOffset").disabled = locked;
+  $("#mrSyncMinus").disabled = locked;
+  $("#mrSyncPlus").disabled = locked;
+  $("#mrSyncReset").disabled = locked;
   $(".recorder-panel").classList.toggle("is-recording", locked);
 }
 
 function removeMrFile({ keepMessage = false } = {}) {
-  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") return;
+  if ((state.mediaRecorder && state.mediaRecorder.state !== "inactive") || state.recordingStarting) return;
+  stopMrBufferPlayback({ preservePosition: false });
   const audio = $("#mrAudio");
   audio.pause();
   audio.removeAttribute("src");
@@ -1878,6 +1982,10 @@ function removeMrFile({ keepMessage = false } = {}) {
   audio.hidden = true;
   if (state.mrObjectUrl) URL.revokeObjectURL(state.mrObjectUrl);
   state.mrObjectUrl = null;
+  state.mrFile = null;
+  state.mrAudioBuffer = null;
+  state.mrDecodePromise = null;
+  state.mrDecodeToken += 1;
   $("#mrFileInput").value = "";
   $("#mrFileName").textContent = "선택된 MR이 없습니다.";
   $("#mrFileInfo span").textContent = "MP3·WAV·M4A 등 기기에 저장된 반주 파일을 불러올 수 있습니다.";
@@ -1888,7 +1996,7 @@ function removeMrFile({ keepMessage = false } = {}) {
   updateRecordingIdleText();
 }
 
-function handleMrFileSelection(event) {
+async function handleMrFileSelection(event) {
   const [file] = event.target.files || [];
   if (!file) return;
   if (!file.type.startsWith("audio/") && !/\.(mp3|wav|m4a|aac|ogg|flac|webm)$/i.test(file.name)) {
@@ -1896,10 +2004,14 @@ function handleMrFileSelection(event) {
     event.target.value = "";
     return;
   }
+  stopMrBufferPlayback({ preservePosition: false });
   const audio = $("#mrAudio");
   audio.pause();
   if (state.mrObjectUrl) URL.revokeObjectURL(state.mrObjectUrl);
   state.mrObjectUrl = URL.createObjectURL(file);
+  state.mrFile = file;
+  state.mrAudioBuffer = null;
+  const token = ++state.mrDecodeToken;
   audio.src = state.mrObjectUrl;
   audio.preload = "auto";
   audio.playsInline = true;
@@ -1907,12 +2019,29 @@ function handleMrFileSelection(event) {
   audio.hidden = false;
   audio.load();
   $("#mrFileName").textContent = file.name;
-  $("#mrFileInfo span").textContent = `${formatFileSize(file.size)} · 기기 안에서만 사용됩니다.`;
-  $("#restartMr").disabled = false;
+  $("#mrFileInfo span").textContent = `${formatFileSize(file.size)} · 싱크 녹음을 위해 오디오를 분석하고 있습니다.`;
+  $("#restartMr").disabled = true;
   $("#removeMr").disabled = false;
-  $("#mrDuration").textContent = "불러오는 중";
-  $("#mrMessage").textContent = "MR을 불러왔습니다. 녹음 시작을 누르면 반주와 보컬을 함께 저장합니다.";
+  $("#mrDuration").textContent = "분석 중";
+  $("#mrMessage").textContent = "MR을 메모리에 불러오는 중입니다. 완료되면 같은 오디오 시간축으로 녹음합니다.";
   updateRecordingIdleText();
+
+  state.mrDecodePromise = decodeMrFile(file, token);
+  try {
+    const buffer = await state.mrDecodePromise;
+    if (token !== state.mrDecodeToken) return;
+    $("#mrDuration").textContent = formatMrDuration(buffer.duration);
+    $("#mrFileInfo span").textContent = `${formatFileSize(file.size)} · ${formatMrDuration(buffer.duration)} · 싱크 녹음 준비 완료`;
+    $("#restartMr").disabled = false;
+    $("#mrMessage").textContent = "MR 분석이 끝났습니다. 녹음 시작 시 3초 카운트인 후 정확한 오디오 시간축에서 재생됩니다.";
+  } catch (error) {
+    if (error?.name === "AbortError") return;
+    state.mrAudioBuffer = null;
+    state.mrDecodePromise = null;
+    $("#restartMr").disabled = false;
+    $("#mrDuration").textContent = "재생만 가능";
+    $("#mrMessage").textContent = `MR 분석에 실패했습니다: ${error.message} MP3 또는 WAV 파일로 다시 시도해 주세요.`;
+  }
 }
 
 async function restartMrPlayback() {
@@ -1929,7 +2058,138 @@ async function restartMrPlayback() {
   }
 }
 
+function clearMrAutoStopTimer() {
+  window.clearTimeout(state.mrAutoStopTimer);
+  state.mrAutoStopTimer = null;
+}
+
+function getCurrentMrPlaybackOffset() {
+  const buffer = state.mrAudioBuffer;
+  if (!buffer) return 0;
+  let offset = state.mrPlaybackScheduledOffsetSec || state.mrPlaybackOffsetSec || 0;
+  const context = state.audioContext;
+  if (state.mrPlaybackSource && context && context.currentTime > state.mrPlaybackStartAt) {
+    offset += context.currentTime - state.mrPlaybackStartAt;
+  }
+  return clamp(offset, 0, buffer.duration);
+}
+
+function stopMrBufferPlayback({ preservePosition = true } = {}) {
+  clearMrAutoStopTimer();
+  const source = state.mrPlaybackSource;
+  if (preservePosition) state.mrPlaybackOffsetSec = getCurrentMrPlaybackOffset();
+  else state.mrPlaybackOffsetSec = 0;
+  state.mrPlaybackSource = null;
+  state.mrPlaybackStartAt = 0;
+  state.mrPlaybackScheduledOffsetSec = state.mrPlaybackOffsetSec;
+  if (source) {
+    source.onended = null;
+    try { source.stop(); } catch {}
+    try { source.disconnect(); } catch {}
+  }
+}
+
+function updateMrDurationDuringRecording() {
+  if (!state.mrAudioBuffer) return;
+  const current = getCurrentMrPlaybackOffset();
+  $("#mrDuration").textContent = `${formatMrDuration(current)} / ${formatMrDuration(state.mrAudioBuffer.duration)}`;
+}
+
+function scheduleMrBufferPlayback(startAt, offsetSec = 0) {
+  const context = ensureAudioContext();
+  const buffer = state.mrAudioBuffer;
+  if (!buffer) throw new Error("MR 분석이 완료되지 않았습니다.");
+  stopMrBufferPlayback({ preservePosition: false });
+  const normalizedOffset = clamp(Number(offsetSec) || 0, 0, Math.max(0, buffer.duration - 0.01));
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  const monitorRequested = $("#autoPlayMr").checked;
+  if (monitorRequested) source.connect(ensureMrMonitorGain());
+  if (state.mrRecordGain) source.connect(state.mrRecordGain);
+
+  const sessionId = ++state.mrPlaybackSessionId;
+  state.mrPlaybackSource = source;
+  state.mrPlaybackStartAt = startAt;
+  state.mrPlaybackOffsetSec = normalizedOffset;
+  state.mrPlaybackScheduledOffsetSec = normalizedOffset;
+  state.recordingControlsMr = true;
+
+  source.onended = () => {
+    if (sessionId !== state.mrPlaybackSessionId || source !== state.mrPlaybackSource) return;
+    state.mrPlaybackOffsetSec = buffer.duration;
+    state.mrPlaybackScheduledOffsetSec = buffer.duration;
+    state.mrPlaybackSource = null;
+    state.recordingControlsMr = false;
+    $("#mrDuration").textContent = `${formatMrDuration(buffer.duration)} / ${formatMrDuration(buffer.duration)}`;
+    if (state.mediaRecorder && state.mediaRecorder.state !== "inactive" && $("#autoStopOnMrEnd").checked) {
+      $("#recordingMessage").textContent = "MR 재생이 끝났습니다. 싱크 보정 지연의 마지막 소리까지 담은 뒤 자동 저장합니다.";
+      state.mrAutoStopTimer = window.setTimeout(() => stopRecording({ skipTail: true }), getRecordingSyncTailMs());
+    }
+  };
+  source.start(startAt, normalizedOffset);
+  return source;
+}
+
+function clearRecordingCountdown() {
+  cancelAnimationFrame(state.recordingCountdownFrame);
+  state.recordingCountdownFrame = null;
+  state.recordingCountdownNodes.forEach((node) => {
+    try { node.stop(); } catch {}
+    try { node.disconnect(); } catch {}
+  });
+  state.recordingCountdownNodes = [];
+  const countdown = $("#recordingCountdown");
+  countdown.hidden = true;
+  countdown.textContent = "3";
+}
+
+function scheduleCountIn(startAt, seconds) {
+  clearRecordingCountdown();
+  if (seconds <= 0) return;
+  const context = ensureAudioContext();
+  for (let remaining = seconds; remaining >= 1; remaining -= 1) {
+    const when = startAt - remaining;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.frequency.value = remaining === 1 ? 1040 : 760;
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.exponentialRampToValueAtTime(0.16, when + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.1);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(when);
+    oscillator.stop(when + 0.12);
+    state.recordingCountdownNodes.push(oscillator, gain);
+  }
+  const countdown = $("#recordingCountdown");
+  countdown.hidden = false;
+  const update = () => {
+    const remaining = startAt - context.currentTime;
+    if (remaining <= 0) {
+      countdown.textContent = "시작";
+      window.setTimeout(() => { countdown.hidden = true; }, 420);
+      state.recordingCountdownFrame = null;
+      return;
+    }
+    countdown.textContent = String(Math.max(1, Math.ceil(Math.min(seconds, remaining))));
+    state.recordingCountdownFrame = requestAnimationFrame(update);
+  };
+  update();
+}
+
+function clearRecordingScheduledActions() {
+  window.clearTimeout(state.recordingStartTimeout);
+  window.clearTimeout(state.recordingUiStartTimeout);
+  window.clearTimeout(state.recordingStopTimeout);
+  state.recordingStartTimeout = null;
+  state.recordingUiStartTimeout = null;
+  state.recordingStopTimeout = null;
+  clearRecordingCountdown();
+}
+
 function disconnectRecordingMix() {
+  clearRecordingScheduledActions();
+  stopMrBufferPlayback({ preservePosition: false });
   if (state.recordingMixMicSource) {
     try { state.recordingMixMicSource.disconnect(); } catch {}
   }
@@ -1939,18 +2199,26 @@ function disconnectRecordingMix() {
   if (state.recordingVocalCompressor) {
     try { state.recordingVocalCompressor.disconnect(); } catch {}
   }
+  if (state.recordingVocalDelay) {
+    try { state.recordingVocalDelay.disconnect(); } catch {}
+  }
   if (state.recordingMixBus) {
     try { state.recordingMixBus.disconnect(); } catch {}
   }
   if (state.mrRecordGain) {
-    try { state.mrSourceNode?.disconnect(state.mrRecordGain); } catch {}
     try { state.mrRecordGain.disconnect(); } catch {}
+  }
+  if (state.mrRecordDelay) {
+    try { state.mrRecordDelay.disconnect(); } catch {}
   }
   if (state.recordingMixCompressor) {
     try { state.recordingMixCompressor.disconnect(); } catch {}
   }
   if (state.recordingMixMasterGain) {
     try { state.recordingMixMasterGain.disconnect(); } catch {}
+  }
+  if (state.recordingGate) {
+    try { state.recordingGate.disconnect(); } catch {}
   }
   if (state.recordingOutputStream) {
     state.recordingOutputStream.getTracks().forEach((track) => {
@@ -1960,32 +2228,38 @@ function disconnectRecordingMix() {
   state.recordingMixMicSource = null;
   state.recordingVocalGain = null;
   state.recordingVocalCompressor = null;
+  state.recordingVocalDelay = null;
   state.recordingMixBus = null;
   state.mrRecordGain = null;
+  state.mrRecordDelay = null;
   state.recordingMixCompressor = null;
   state.recordingMixMasterGain = null;
+  state.recordingGate = null;
   state.recordingMixDestination = null;
   state.recordingOutputStream = null;
 }
 
-function createMixedRecordingStream(microphoneStream) {
+function createMixedRecordingStream(microphoneStream, scheduledStartAt) {
   const audioContext = ensureAudioContext();
   const destination = audioContext.createMediaStreamDestination();
   const microphoneSource = audioContext.createMediaStreamSource(microphoneStream);
   const vocalGain = audioContext.createGain();
   const vocalCompressor = audioContext.createDynamicsCompressor();
+  const vocalDelay = audioContext.createDelay(1);
   const mixBus = audioContext.createGain();
   const masterGain = audioContext.createGain();
   const limiter = audioContext.createDynamicsCompressor();
+  const gate = audioContext.createGain();
+  const includesMr = Boolean($("#includeMrInRecording").checked && state.mrAudioBuffer);
+  const syncMs = includesMr ? getMrSyncOffsetMs() : 0;
 
-  // 보컬만 가볍게 정리하고 MR은 압축기에서 분리해 반주가 출렁이는 현상을 줄입니다.
   vocalCompressor.threshold.value = -18;
   vocalCompressor.knee.value = 12;
   vocalCompressor.ratio.value = 2.4;
   vocalCompressor.attack.value = 0.008;
   vocalCompressor.release.value = 0.16;
+  vocalDelay.delayTime.value = Math.max(0, -syncMs) / 1000;
 
-  // 최종단은 피크만 막는 소프트 리미터로 사용합니다.
   limiter.threshold.value = -2;
   limiter.knee.value = 1;
   limiter.ratio.value = 16;
@@ -1996,32 +2270,39 @@ function createMixedRecordingStream(microphoneStream) {
   microphoneSource.connect(vocalGain);
   vocalGain.gain.value = getVocalRecordingGainValue();
   vocalGain.connect(vocalCompressor);
-  vocalCompressor.connect(mixBus);
+  vocalCompressor.connect(vocalDelay);
+  vocalDelay.connect(mixBus);
 
-  let includesMr = false;
-  if ($("#includeMrInRecording").checked && hasMrFile()) {
-    const mrSource = ensureMrAudioGraph();
+  if (includesMr) {
     const mrRecordGain = audioContext.createGain();
+    const mrRecordDelay = audioContext.createDelay(1);
     mrRecordGain.gain.value = getMrRecordingGainValue();
-    mrSource.connect(mrRecordGain);
-    mrRecordGain.connect(mixBus);
+    mrRecordDelay.delayTime.value = Math.max(0, syncMs) / 1000;
+    mrRecordGain.connect(mrRecordDelay);
+    mrRecordDelay.connect(mixBus);
     state.mrRecordGain = mrRecordGain;
-    includesMr = true;
+    state.mrRecordDelay = mrRecordDelay;
   }
 
   mixBus.connect(masterGain);
   masterGain.connect(limiter);
-  limiter.connect(destination);
+  limiter.connect(gate);
+  gate.connect(destination);
+  gate.gain.setValueAtTime(0, audioContext.currentTime);
+  gate.gain.setValueAtTime(0, Math.max(audioContext.currentTime, scheduledStartAt - 0.01));
+  gate.gain.setValueAtTime(1, scheduledStartAt);
 
   state.recordingMixDestination = destination;
   state.recordingMixMicSource = microphoneSource;
   state.recordingMixCompressor = limiter;
   state.recordingVocalCompressor = vocalCompressor;
+  state.recordingVocalDelay = vocalDelay;
   state.recordingMixBus = mixBus;
   state.recordingMixMasterGain = masterGain;
+  state.recordingGate = gate;
   state.recordingVocalGain = vocalGain;
   state.recordingOutputStream = destination.stream;
-  return { stream: destination.stream, includesMr };
+  return { stream: destination.stream, includesMr, syncMs };
 }
 
 function formatRecordingDuration(milliseconds) {
@@ -2159,7 +2440,8 @@ function renderRecordings() {
     }
     const meta = document.createElement("span");
     const created = new Date(recording.createdAt);
-    meta.textContent = `${created.toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })} · ${formatRecordingDuration(recording.durationMs)} · ${formatFileSize(recording.blob?.size || 0)}`;
+    const syncText = recording.hasMr && Number(recording.syncOffsetMs) ? ` · 싱크 ${formatSignedMilliseconds(recording.syncOffsetMs)}` : "";
+    meta.textContent = `${created.toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })} · ${formatRecordingDuration(recording.durationMs)} · ${formatFileSize(recording.blob?.size || 0)}${syncText}`;
     titleWrap.append(title, meta);
     header.appendChild(titleWrap);
 
@@ -2234,14 +2516,15 @@ function setRecordingBadge(text, mode = "idle") {
 function getRecordingElapsedMs() {
   let elapsed = state.recordingActiveMs;
   if (state.mediaRecorder?.state === "recording" && state.recordingSegmentStartedAt) {
-    elapsed += performance.now() - state.recordingSegmentStartedAt;
+    elapsed += Math.max(0, performance.now() - state.recordingSegmentStartedAt);
   }
-  return elapsed;
+  return Math.max(0, elapsed);
 }
 
 function updateRecordingTimer() {
   const elapsed = getRecordingElapsedMs();
   $("#recordingTimer").textContent = formatRecordingDuration(elapsed);
+  if (state.recordingControlsMr && state.mrAudioBuffer) updateMrDurationDuringRecording();
   if (elapsed >= MAX_RECORDING_MS && state.mediaRecorder?.state !== "inactive") {
     $("#recordingMessage").textContent = "최대 녹음 시간 30분에 도달해 자동으로 저장합니다.";
     stopRecording();
@@ -2311,12 +2594,16 @@ function preferredRecordingMimeType() {
 }
 
 function resetRecordingControls() {
+  clearRecordingScheduledActions();
   clearInterval(state.recordingTimerId);
   state.recordingTimerId = null;
   state.recordingStartedAt = 0;
   state.recordingSegmentStartedAt = 0;
   state.recordingActiveMs = 0;
+  state.recordingStarting = false;
+  state.recordingStopping = false;
   $("#recordingTimer").textContent = "00:00";
+  if (state.mrAudioBuffer) $("#mrDuration").textContent = formatMrDuration(state.mrAudioBuffer.duration);
   $("#toggleRecording").disabled = false;
   $("#toggleRecording").textContent = "● 녹음 시작";
   $("#pauseRecording").disabled = true;
@@ -2339,6 +2626,7 @@ async function finishRecording(blob, durationMs, mimeType) {
     mimeType: mimeType || blob.type || "audio/webm",
     hasMr: Boolean(meta.hasMr),
     mrName: meta.mrName || "",
+    syncOffsetMs: Number(meta.syncOffsetMs) || 0,
     blob
   };
   try {
@@ -2363,12 +2651,17 @@ function cleanupRecordingStream() {
   state.mediaRecorder = null;
   state.currentRecordingMeta = null;
   state.recordingControlsMr = false;
+  state.recordingStarting = false;
+  state.recordingStopping = false;
   state.mrResumeAfterPause = false;
   resetRecordingControls();
 }
 
 async function startRecording() {
-  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") return;
+  if (state.recordingStarting || (state.mediaRecorder && state.mediaRecorder.state !== "inactive")) return;
+  const sessionToken = ++state.recordingSessionToken;
+  state.recordingStarting = true;
+  state.recordingStopping = false;
   try {
     if (location.protocol === "file:") throw new Error("녹음은 PC에서 훈뮤직툴 실행.bat을 사용하거나, 모바일에서 HTTPS 배포 주소로 열어야 합니다.");
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error("이 브라우저 환경에서는 마이크 녹음을 사용할 수 없습니다.");
@@ -2378,10 +2671,12 @@ async function startRecording() {
     stopProgression();
     stopTuner(false);
     stopVocalTargetTone();
+    $("#mrAudio").pause();
     $("#toggleRecording").disabled = true;
     $("#toggleRecording").textContent = "마이크 확인 중...";
-    $("#recordingStateText").textContent = "마이크 사용 권한을 확인하고 있습니다.";
-    setRecordingBadge("권한 확인", "saving");
+    $("#recordingStateText").textContent = "마이크와 MR을 준비하고 있습니다.";
+    setRecordingBadge("준비 중", "saving");
+    setMrRecordingLocked(true);
 
     let stream = state.vocalStream;
     const hasLiveTrack = stream?.getAudioTracks().some((track) => track.readyState === "live");
@@ -2395,34 +2690,42 @@ async function startRecording() {
         }
       });
     }
+    if (sessionToken !== state.recordingSessionToken) return;
 
     state.recordingStream = stream;
     await warnIfBluetoothMicrophone(stream);
-    const recordingAudioContext = ensureAudioContext();
-    if (recordingAudioContext.state === "suspended") await recordingAudioContext.resume();
-    if (hasMrFile() && ($("#autoPlayMr").checked || $("#includeMrInRecording").checked)) {
-      ensureMrAudioGraph();
-      await waitForMrReady();
+    const context = ensureAudioContext();
+    if (context.state === "suspended") await context.resume();
+
+    const shouldUseMr = hasMrFile() && ($("#autoPlayMr").checked || $("#includeMrInRecording").checked);
+    if (shouldUseMr) {
+      $("#recordingStateText").textContent = "MR 전체를 메모리에 불러오고 있습니다.";
+      await waitForMrBufferReady();
     }
-    const mixed = createMixedRecordingStream(stream);
-    const recordingSourceStream = mixed.stream;
+    if (sessionToken !== state.recordingSessionToken) return;
+
+    const countInSeconds = getRecordingCountInSeconds();
+    const startAt = context.currentTime + countInSeconds + 0.22;
+    const mixed = createMixedRecordingStream(stream, startAt);
     state.currentRecordingMeta = {
       hasMr: mixed.includesMr,
-      mrName: mixed.includesMr ? $("#mrFileName").textContent : ""
+      mrName: mixed.includesMr ? $("#mrFileName").textContent : "",
+      syncOffsetMs: mixed.includesMr ? mixed.syncMs : 0
     };
+
     const mimeType = preferredRecordingMimeType();
     const options = mimeType ? { mimeType, audioBitsPerSecond: 160000 } : { audioBitsPerSecond: 160000 };
     let recorder;
     try {
-      recorder = new MediaRecorder(recordingSourceStream, options);
+      recorder = new MediaRecorder(mixed.stream, options);
     } catch {
-      recorder = new MediaRecorder(recordingSourceStream);
+      recorder = new MediaRecorder(mixed.stream);
     }
 
     state.recordingChunks = [];
     state.mediaRecorder = recorder;
-    state.recordingStartedAt = performance.now();
-    state.recordingSegmentStartedAt = state.recordingStartedAt;
+    state.recordingStartedAt = performance.now() + Math.max(0, (startAt - context.currentTime) * 1000);
+    state.recordingSegmentStartedAt = 0;
     state.recordingActiveMs = 0;
 
     recorder.addEventListener("dataavailable", (event) => {
@@ -2446,39 +2749,49 @@ async function startRecording() {
       setRecordingBadge("오류", "error");
     });
 
-    if ($("#autoPlayMr").checked && hasMrFile()) $("#mrAudio").currentTime = 0;
-    recorder.start(1000);
-    setupRecordingLevelMonitor(stream);
-    state.recordingTimerId = window.setInterval(updateRecordingTimer, 200);
+    state.recordingTimerId = window.setInterval(updateRecordingTimer, 100);
     $("#toggleRecording").disabled = true;
-    $("#toggleRecording").textContent = "● 녹음 중";
-    $("#pauseRecording").disabled = false;
-    $("#stopRecording").disabled = false;
+    $("#toggleRecording").textContent = countInSeconds ? `카운트인 ${countInSeconds}초` : "● 녹음 준비";
+    $("#pauseRecording").disabled = true;
+    $("#stopRecording").disabled = true;
     $("#recordingName").disabled = true;
-    setMrRecordingLocked(true);
-    setRecordingBadge("녹음 중", "recording");
+    setRecordingBadge(countInSeconds ? "카운트인" : "시작 준비", "saving");
 
-    state.recordingControlsMr = false;
-    if ($("#autoPlayMr").checked && hasMrFile()) {
-      try {
-        ensureMrAudioGraph();
-        const mrAudio = $("#mrAudio");
-        await waitForMrReady();
-        mrAudio.currentTime = 0;
-        await mrAudio.play();
-        state.recordingControlsMr = true;
-      } catch (mrError) {
-        $("#mrMessage").textContent = `녹음은 시작됐지만 MR 자동 재생에 실패했습니다: ${mrError.message}`;
-      }
+    if (shouldUseMr && state.mrAudioBuffer) {
+      scheduleMrBufferPlayback(startAt, 0);
     }
+    scheduleCountIn(startAt, countInSeconds);
 
-    const includesMrText = state.currentRecordingMeta?.hasMr ? "MR과 보컬을 함께 녹음 중입니다." : "보컬만 녹음 중입니다.";
-    $("#recordingStateText").textContent = includesMrText;
-    $("#recordingMessage").textContent = state.currentRecordingMeta?.hasMr
-      ? "정지하면 MR과 보컬이 합쳐진 파일로 자동 저장됩니다."
-      : "정지하면 보컬 녹음 파일로 자동 저장됩니다.";
-    updateRecordingTimer();
+    const recorderStartDelayMs = Math.max(0, (startAt - context.currentTime) * 1000 - RECORDING_PREROLL_MS);
+    state.recordingStartTimeout = window.setTimeout(() => {
+      if (sessionToken !== state.recordingSessionToken || state.mediaRecorder !== recorder || recorder.state !== "inactive") return;
+      try {
+        recorder.start(250);
+        setupRecordingLevelMonitor(stream);
+      } catch (error) {
+        $("#recordingMessage").textContent = `녹음기를 시작하지 못했습니다: ${error.message}`;
+        cleanupRecordingStream();
+      }
+    }, recorderStartDelayMs);
+
+    const uiStartDelayMs = Math.max(0, (startAt - context.currentTime) * 1000);
+    state.recordingUiStartTimeout = window.setTimeout(() => {
+      if (sessionToken !== state.recordingSessionToken || state.mediaRecorder !== recorder) return;
+      state.recordingStarting = false;
+      state.recordingSegmentStartedAt = performance.now();
+      $("#toggleRecording").textContent = "● 녹음 중";
+      $("#pauseRecording").disabled = false;
+      $("#stopRecording").disabled = false;
+      setRecordingBadge("녹음 중", "recording");
+      const includesMrText = state.currentRecordingMeta?.hasMr ? "MR과 보컬을 같은 시간축으로 녹음 중입니다." : "보컬만 녹음 중입니다.";
+      $("#recordingStateText").textContent = includesMrText;
+      $("#recordingMessage").textContent = state.currentRecordingMeta?.hasMr
+        ? `싱크 보정 ${formatSignedMilliseconds(state.currentRecordingMeta.syncOffsetMs)}가 적용됐습니다. 정지하면 합쳐진 파일로 저장됩니다.`
+        : "정지하면 보컬 녹음 파일로 자동 저장됩니다.";
+      updateRecordingTimer();
+    }, uiStartDelayMs);
   } catch (error) {
+    state.recordingSessionToken += 1;
     cleanupRecordingStream();
     const message = microphoneErrorMessage(error);
     $("#recordingMessage").textContent = message;
@@ -2487,38 +2800,55 @@ async function startRecording() {
   }
 }
 
+function pauseMrBufferPlayback() {
+  if (!state.mrPlaybackSource) return false;
+  state.mrPlaybackOffsetSec = getCurrentMrPlaybackOffset();
+  stopMrBufferPlayback({ preservePosition: true });
+  return true;
+}
+
 function toggleRecordingPause() {
   const recorder = state.mediaRecorder;
-  if (!recorder || recorder.state === "inactive") return;
+  if (!recorder || recorder.state === "inactive" || state.recordingStarting) return;
+  const context = ensureAudioContext();
   if (recorder.state === "recording") {
-    state.recordingActiveMs += performance.now() - state.recordingSegmentStartedAt;
+    state.recordingActiveMs += state.recordingSegmentStartedAt ? Math.max(0, performance.now() - state.recordingSegmentStartedAt) : 0;
     state.recordingSegmentStartedAt = 0;
     recorder.pause();
-    state.mrResumeAfterPause = false;
-    if (state.recordingControlsMr && !$("#mrAudio").paused) {
-      $("#mrAudio").pause();
-      state.mrResumeAfterPause = true;
-    }
+    state.recordingGate?.gain.cancelScheduledValues(context.currentTime);
+    state.recordingGate?.gain.setValueAtTime(0, context.currentTime);
+    state.mrResumeAfterPause = pauseMrBufferPlayback();
     $("#pauseRecording").textContent = "계속 녹음";
-    $("#recordingStateText").textContent = "녹음을 잠시 멈췄습니다.";
+    $("#recordingStateText").textContent = "녹음과 MR을 같은 위치에서 잠시 멈췄습니다.";
     setRecordingBadge("일시정지", "paused");
     updateRecordingTimer();
   } else if (recorder.state === "paused") {
+    const resumeAt = context.currentTime + RECORDING_RESUME_LEAD_MS / 1000;
     recorder.resume();
-    state.recordingSegmentStartedAt = performance.now();
-    if (state.mrResumeAfterPause && hasMrFile()) $("#mrAudio").play().catch(() => {});
+    state.recordingGate?.gain.cancelScheduledValues(context.currentTime);
+    state.recordingGate?.gain.setValueAtTime(0, context.currentTime);
+    state.recordingGate?.gain.setValueAtTime(1, resumeAt);
+    if (state.mrResumeAfterPause && state.mrAudioBuffer && state.mrPlaybackOffsetSec < state.mrAudioBuffer.duration - 0.01) {
+      scheduleMrBufferPlayback(resumeAt, state.mrPlaybackOffsetSec);
+    }
     state.mrResumeAfterPause = false;
+    state.recordingSegmentStartedAt = performance.now() + RECORDING_RESUME_LEAD_MS;
     $("#pauseRecording").textContent = "일시정지";
-    $("#recordingStateText").textContent = "녹음을 계속하고 있습니다.";
+    $("#recordingStateText").textContent = "MR 위치를 복원해 녹음을 계속하고 있습니다.";
     setRecordingBadge("녹음 중", "recording");
   }
 }
 
-function stopRecording() {
+function stopRecording({ skipTail = false } = {}) {
   const recorder = state.mediaRecorder;
-  if (!recorder || recorder.state === "inactive") return;
+  if (!recorder || recorder.state === "inactive" || state.recordingStopping) return;
+  state.recordingStopping = true;
+  state.recordingSessionToken += 1;
+  state.recordingStarting = false;
+  clearRecordingScheduledActions();
+  const context = state.audioContext;
   if (recorder.state === "recording" && state.recordingSegmentStartedAt) {
-    state.recordingActiveMs += performance.now() - state.recordingSegmentStartedAt;
+    state.recordingActiveMs += Math.max(0, performance.now() - state.recordingSegmentStartedAt);
     state.recordingSegmentStartedAt = 0;
   }
   clearInterval(state.recordingTimerId);
@@ -2526,18 +2856,50 @@ function stopRecording() {
   updateRecordingTimer();
   $("#pauseRecording").disabled = true;
   $("#stopRecording").disabled = true;
-  if (state.recordingControlsMr) $("#mrAudio").pause();
+
+  const wasPaused = recorder.state === "paused";
+  const hasMixedMr = Boolean(state.currentRecordingMeta?.hasMr);
+  const tailMs = skipTail || wasPaused ? 0 : (hasMixedMr ? getRecordingSyncTailMs() : 80);
+
+  // 새 입력은 즉시 막고 DelayNode 안에 남아 있는 보정 신호만 끝까지 흘려보냅니다.
+  if (context) {
+    const now = context.currentTime;
+    if (state.recordingVocalGain) {
+      state.recordingVocalGain.gain.cancelScheduledValues(now);
+      state.recordingVocalGain.gain.setValueAtTime(0, now);
+    }
+    if (state.mrRecordGain) {
+      state.mrRecordGain.gain.cancelScheduledValues(now);
+      state.mrRecordGain.gain.setValueAtTime(0, now);
+    }
+  }
+  stopMrBufferPlayback({ preservePosition: false });
+  $("#mrAudio").pause();
   state.recordingControlsMr = false;
   state.mrResumeAfterPause = false;
-  $("#recordingStateText").textContent = "녹음을 마무리하고 있습니다.";
+  $("#recordingStateText").textContent = tailMs > 0
+    ? "싱크 보정의 마지막 소리까지 담고 있습니다."
+    : "녹음을 마무리하고 있습니다.";
   setRecordingBadge("저장 중", "saving");
-  try {
-    recorder.requestData?.();
-    recorder.stop();
-  } catch (error) {
-    $("#recordingMessage").textContent = error.message;
-    cleanupRecordingStream();
-  }
+
+  const finalizeStop = () => {
+    state.recordingStopTimeout = null;
+    if (context && state.recordingGate) {
+      state.recordingGate.gain.cancelScheduledValues(context.currentTime);
+      state.recordingGate.gain.setValueAtTime(0, context.currentTime);
+    }
+    if (tailMs > 0) state.recordingActiveMs += tailMs;
+    try {
+      recorder.requestData?.();
+      recorder.stop();
+    } catch (error) {
+      $("#recordingMessage").textContent = error.message;
+      cleanupRecordingStream();
+    }
+  };
+
+  if (tailMs > 0) state.recordingStopTimeout = window.setTimeout(finalizeStop, tailMs);
+  else finalizeStop();
 }
 
 async function deleteAllRecordings() {
@@ -2803,7 +3165,11 @@ function bindEvents() {
   ["#mrMonitorVolume", "#mrMixVolume", "#vocalMixVolume"].forEach((selector) => {
     $(selector).addEventListener("input", updateMrMixerLabels);
   });
-  ["#autoPlayMr", "#includeMrInRecording", "#autoStopOnMrEnd"].forEach((selector) => {
+  $("#mrSyncOffset").addEventListener("input", updateMrSyncControls);
+  $("#mrSyncMinus").addEventListener("click", () => adjustMrSyncOffset(-10));
+  $("#mrSyncPlus").addEventListener("click", () => adjustMrSyncOffset(10));
+  $("#mrSyncReset").addEventListener("click", resetMrSyncOffset);
+  ["#autoPlayMr", "#includeMrInRecording", "#autoStopOnMrEnd", "#recordingCountIn"].forEach((selector) => {
     $(selector).addEventListener("change", saveMrSettings);
   });
   $("#mrAudio").addEventListener("loadedmetadata", () => {
@@ -2813,10 +3179,7 @@ function bindEvents() {
     try { ensureMrAudioGraph(); } catch (error) { $("#mrMessage").textContent = error.message; }
   });
   $("#mrAudio").addEventListener("ended", () => {
-    if (state.mediaRecorder && state.mediaRecorder.state !== "inactive" && state.recordingControlsMr && $("#autoStopOnMrEnd").checked) {
-      $("#recordingMessage").textContent = "MR 재생이 끝나 녹음을 자동으로 저장합니다.";
-      stopRecording();
-    }
+    if (!state.mediaRecorder || state.mediaRecorder.state === "inactive") $("#mrMessage").textContent = "MR 미리듣기가 끝났습니다.";
   });
   $("#resetVocalPractice").addEventListener("click", () => {
     resetVocalPracticeStats(false);
@@ -2871,7 +3234,8 @@ function bindEvents() {
   });
 
   window.addEventListener("pagehide", () => {
-    stopRecording();
+    stopRecording({ skipTail: true });
+    stopMrBufferPlayback({ preservePosition: false });
     $("#mrAudio").pause();
     if (state.mrObjectUrl) URL.revokeObjectURL(state.mrObjectUrl);
     revokeRecordingObjectUrls();

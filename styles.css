@@ -1376,7 +1376,7 @@ footer {
   .mr-mixer-grid label { padding: 9px 10px; }
 }
 
-/* v1.6.2 모바일 바로 실행·설치 */
+/* v1.6.3 모바일 바로 실행·설치 */
 html, body { overscroll-behavior-y: none; }
 body { min-height: 100dvh; }
 button, a, input, select { touch-action: manipulation; }
@@ -1582,4 +1582,81 @@ input, select, textarea { font-size: 16px; }
 @media (display-mode: standalone) {
   .install-btn { display: none; }
   .app-shell { padding-top: max(14px, env(safe-area-inset-top)); }
+}
+
+
+/* v1.6.3 MR/보컬 싱크 안정화 */
+.mr-sync-panel {
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid rgba(91, 91, 214, 0.2);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(91,91,214,0.07), rgba(255,255,255,0.9));
+}
+.mr-sync-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.mr-sync-heading strong { color: var(--text); font-size: 0.74rem; }
+.mr-sync-heading output {
+  min-width: 62px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: var(--accent);
+  background: white;
+  font-size: 0.68rem;
+  font-weight: 950;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.mr-sync-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.59rem;
+  font-weight: 800;
+}
+.mr-sync-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-top: 9px;
+}
+.mr-sync-actions .secondary-btn { min-height: 36px; padding: 0 7px; font-size: 0.67rem; }
+.mr-sync-panel > p {
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 0.62rem;
+  line-height: 1.5;
+}
+.recording-countdown {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 12px;
+  border: 2px solid rgba(91,91,214,0.28);
+  border-radius: 50%;
+  color: white;
+  background: var(--accent);
+  box-shadow: 0 12px 30px rgba(91,91,214,0.26);
+  font-size: 1.65rem;
+  font-weight: 950;
+  animation: recording-count-pulse 0.85s ease-in-out infinite;
+}
+.recording-countdown[hidden] { display: none; }
+@keyframes recording-count-pulse {
+  0%, 100% { transform: scale(0.94); opacity: 0.86; }
+  45% { transform: scale(1); opacity: 1; }
+}
+.recorder-panel.is-recording .mr-sync-panel button:disabled,
+.recorder-panel.is-recording .mr-sync-panel input:disabled { opacity: 0.48; }
+@media (max-width: 420px) {
+  .mr-sync-actions { gap: 5px; }
+  .mr-sync-actions .secondary-btn { font-size: 0.62rem; }
 }
