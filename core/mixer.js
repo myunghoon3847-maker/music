@@ -17,7 +17,8 @@
     overdub: {
       active: false, recorder: null, stream: null, chunks: [], source: null, gate: null, destination: null,
       analyser: null, levelData: null, levelFrame: null, startAt: 0, recorderStartAt: 0, timerId: null,
-      autoStopTimer: null, countInNodes: [], stopping: false
+      autoStopTimer: null, countInNodes: [], stopping: false, targetTrackId: "", recordStartSec: 0,
+      timelineRawStartSec: 0
     }
   };
 
@@ -56,10 +57,11 @@
     if (recording.mrBlob instanceof Blob) defs.push({ key: "mr", kind: "mr", name: "MR 트랙", blob: recording.mrBlob, trimStartSec: 0, base: true });
     if (recording.vocalBlob instanceof Blob) defs.push({ key: "vocal", kind: "vocal", name: "보컬 트랙", blob: recording.vocalBlob, trimStartSec: 0, base: true });
     (Array.isArray(recording.extraTracks) ? recording.extraTracks : []).forEach((track, index) => {
-      if (!(track?.blob instanceof Blob)) return;
+      if (!track?.id) return;
+      const blob = track.blob instanceof Blob ? track.blob : null;
       defs.push({
         key: getTrackKey(track), kind: "extra", name: String(track.name || `추가 트랙 ${index + 1}`).slice(0, 40),
-        blob: track.blob, trimStartSec: Math.max(0, Number(track.trimStartMs || 0) / 1000), base: false, data: track
+        blob, empty: !blob, trimStartSec: Math.max(0, Number(track.trimStartMs || 0) / 1000), base: false, data: track
       });
     });
     return defs;
@@ -169,6 +171,8 @@
       const initialized = Number(settings.clipModelVersion) >= 1;
       settings.clips = window.HoonTimeline?.sanitizeTrackClips?.(def, settings, buffer) || [];
       if (!initialized) {
+        const recordedStart = Number(def.data?.timelineStartSec);
+        if (settings.clips[0] && Number.isFinite(recordedStart)) settings.clips[0].timelineStartSec = recordedStart;
         settings.clipModelVersion = 1;
         settings.trimStartSec = 0;
         settings.trimEndSec = 0;
@@ -427,11 +431,13 @@
     } else {
       const model = timelineModel();
       state.trackDefs.forEach((def) => {
+        if (options.excludeTrackKey && def.key === options.excludeTrackKey) return;
         (model.clipsByTrack[def.key] || []).forEach((clipWindow) => {
           if (scheduleClip(def, clipWindow, state.position, startAt)) scheduled = true;
         });
       });
     }
+    if (!scheduled && options.overdub) scheduled = true;
     if (!scheduled) { disconnectNodes(); state.position = loopActive ? state.timeline.loopStartSec : 0; updateTimeUi(); return false; }
     state.startAt = startAt; state.startPosition = state.position; state.playing = true;
     updateButtons(); clearPlaybackTimers(); animationLoop();
@@ -534,9 +540,10 @@
 
   function extraCardHtml(def) {
     const key = escapeHtml(def.key); const name = escapeHtml(def.name);
-    return `<article class="mixer-track-card is-extra" data-extra-card="${key}" data-track-select="${key}">
-      <header><div><span class="mixer-track-kicker">ADDITIONAL TRACK</span><strong>${name}</strong></div>
-      <div class="mixer-track-actions"><button class="mixer-mini-btn" data-action="play" type="button">이 트랙만</button><button class="mixer-mini-btn" data-action="mute" type="button">음소거</button><button class="mixer-mini-btn" data-action="solo" type="button">솔로</button><button class="mixer-mini-btn" data-action="reset" type="button">초기화</button><button class="mixer-mini-btn is-danger" data-action="delete" type="button">삭제</button></div></header>
+    const trackState = def.empty ? "빈 트랙" : "녹음 있음";
+    return `<article class="mixer-track-card is-extra${def.empty ? " is-empty" : ""}" data-extra-card="${key}" data-track-select="${key}">
+      <header><div><span class="mixer-track-kicker">ADDITIONAL TRACK</span><strong>${name}</strong><span class="mixer-track-state" data-track-state>${trackState}</span></div>
+      <div class="mixer-track-actions"><button class="mixer-mini-btn is-record-target" data-action="target" type="button">녹음 대상</button><button class="mixer-mini-btn" data-action="play" type="button">이 트랙만</button><button class="mixer-mini-btn" data-action="mute" type="button">음소거</button><button class="mixer-mini-btn" data-action="solo" type="button">솔로</button><button class="mixer-mini-btn" data-action="reset" type="button">초기화</button><button class="mixer-mini-btn is-danger" data-action="delete" type="button">삭제</button></div></header>
       <div class="mixer-control-grid">
         <div class="mixer-value-control"><label><span>음량 <output data-output="volume">100%</output></span><input class="range compact" data-field="volume" type="range" min="0" max="150" value="100" /></label><input class="mixer-small-number" data-number="volume" type="number" min="0" max="150" step="1" value="100" /></div>
         <div class="mixer-value-control"><label><span>팬 <output data-output="pan">C</output></span><input class="range compact" data-field="pan" type="range" min="-100" max="100" value="0" /></label><input class="mixer-small-number" data-number="pan" type="number" min="-100" max="100" step="1" value="0" /></div>
@@ -595,6 +602,7 @@
     document.querySelectorAll("#mixer [data-track-select]").forEach((card) => card.classList.toggle("is-selected", card.dataset.trackSelect === key));
     BASE_KEYS.forEach((baseKey) => $(`${basePrefix(baseKey)}Row`)?.classList.toggle("is-selected", baseKey === key));
     updateSelectedClipInspector();
+    updateRecordTargetUi();
   }
 
   function updateHistoryButtons() {
@@ -632,6 +640,7 @@
     const clips = state.settings[key]?.clips || [];
     if (!keepClip || !clips.some((clip) => clip.id === state.timeline.selectedClipId)) state.timeline.selectedClipId = clips[0]?.id || "";
     updateSelectedTrackUi();
+    updateRecordTargetUi({ syncStart: true });
     if (scroll) {
       const target = BASE_KEYS.includes(key) ? $(`${basePrefix(key)}Row`) : findDataElement("data-extra-card", key);
       target?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
@@ -643,6 +652,7 @@
     state.timeline.selectedTrackKey = trackKey;
     state.timeline.selectedClipId = clipId;
     updateSelectedTrackUi();
+    updateRecordTargetUi({ syncStart: true });
     if (scroll) {
       const target = BASE_KEYS.includes(trackKey) ? $(`${basePrefix(trackKey)}Row`) : findDataElement("data-extra-card", trackKey);
       target?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
@@ -661,20 +671,35 @@
 
   function updateAvailability() {
     const hasAny = state.trackDefs.some((def) => Boolean(state.buffers[def.key]));
+    const selectedExtra = getSelectedExtraDef();
     BASE_KEYS.forEach((key) => {
       const available = Boolean(state.buffers[key]);
       $(`${basePrefix(key)}Row`)?.querySelectorAll(".mixer-control").forEach((element) => { element.disabled = !available || state.overdub.active || state.exporting; });
     });
-    document.querySelectorAll("#mixerExtraTrackGrid input, #mixerExtraTrackGrid button").forEach((element) => { element.disabled = state.overdub.active || state.exporting; });
+    state.trackDefs.filter((def) => !def.base).forEach((def) => {
+      const card = findDataElement("data-extra-card", def.key);
+      if (!card) return;
+      const available = Boolean(state.buffers[def.key]);
+      card.querySelectorAll("input").forEach((element) => { element.disabled = !available || state.overdub.active || state.exporting; });
+      card.querySelectorAll("button").forEach((element) => {
+        const action = element.dataset.action;
+        element.disabled = state.overdub.active || state.exporting || (!available && !["target", "delete"].includes(action));
+      });
+    });
     ["mixerReset", "mixerMasterVolume", "mixerMasterVolumeNumber", "mixerSeek", "mixerPlay", "mixerStop", "mixerExportName", "mixerExportWav", "mixerZoom", "mixerSnap", "mixerLoopStart", "mixerLoopEnd", "mixerLoopToggle"].forEach((id) => { const el = $(id); if (el) el.disabled = !hasAny || state.overdub.active || state.exporting; });
     if ($("mixerCompare")) $("mixerCompare").disabled = !state.originalBuffer || state.overdub.active || state.exporting;
     const extraCount = state.trackDefs.filter((def) => !def.base).length;
-    if ($("mixerOverdubStart")) $("mixerOverdubStart").disabled = !hasAny || state.overdub.active || state.exporting || extraCount >= OVERDUB_MAX_TRACKS;
-    if ($("mixerOverdubStop")) $("mixerOverdubStop").disabled = !state.overdub.active;
-    if ($("mixerOverdubName")) $("mixerOverdubName").disabled = state.overdub.active || !hasAny;
-    if ($("mixerOverdubCountIn")) $("mixerOverdubCountIn").disabled = state.overdub.active || !hasAny;
+    if ($("mixerAddTrack")) $("mixerAddTrack").disabled = !state.recording || state.overdub.active || state.exporting || extraCount >= OVERDUB_MAX_TRACKS;
+    if ($("mixerNewTrackName")) $("mixerNewTrackName").disabled = !state.recording || state.overdub.active || state.exporting || extraCount >= OVERDUB_MAX_TRACKS;
+    const canRecordTarget = Boolean(hasAny && selectedExtra && selectedExtra.data?.id);
+    if ($("mixerTrackRecordStart")) $("mixerTrackRecordStart").disabled = !canRecordTarget || state.overdub.active || state.exporting;
+    if ($("mixerTrackRecordStop")) $("mixerTrackRecordStop").disabled = !state.overdub.active;
+    if ($("mixerRecordStartPosition")) $("mixerRecordStartPosition").disabled = !canRecordTarget || state.overdub.active || state.exporting;
+    if ($("mixerRecordUsePlayhead")) $("mixerRecordUsePlayhead").disabled = !canRecordTarget || state.overdub.active || state.exporting;
+    if ($("mixerOverdubCountIn")) $("mixerOverdubCountIn").disabled = !canRecordTarget || state.overdub.active || state.exporting;
     updateHistoryButtons();
     updateSelectedClipInspector();
+    updateRecordTargetUi();
   }
 
   function updateMeta() {
@@ -727,17 +752,18 @@
         const key = entries[index][0]; const value = result.status === "fulfilled" ? result.value : null;
         if (key === "__original") state.originalBuffer = value; else state.buffers[key] = value;
       });
-      state.trackDefs = state.trackDefs.filter((def) => state.buffers[def.key]);
-      if (!state.trackDefs.length) throw new Error("분리 트랙을 찾지 못했습니다.");
-      const hadClipData = state.trackDefs.every((def) => Number(state.settings[def.key]?.clipModelVersion) >= 1);
+      const playableDefs = state.trackDefs.filter((def) => state.buffers[def.key]);
+      if (!playableDefs.length) throw new Error("재생할 수 있는 분리 트랙을 찾지 못했습니다.");
+      const hadClipData = playableDefs.every((def) => Number(state.settings[def.key]?.clipModelVersion) >= 1);
       sanitizeAllTrackEdits();
-      const firstDef = state.trackDefs.find((def) => def.key === "vocal") || state.trackDefs[0];
+      const firstDef = state.trackDefs.find((def) => def.key === "vocal") || playableDefs[0] || state.trackDefs[0];
       state.timeline.selectedTrackKey = firstDef.key;
       state.timeline.selectedClipId = state.settings[firstDef.key]?.clips?.[0]?.id || "";
       renderExtraStructure(); calculateDuration(); renderControls(); updateMeta();
       if (!hadClipData) scheduleSave();
       const clipCount = state.trackDefs.reduce((sum, def) => sum + (state.settings[def.key]?.clips?.length || 0), 0);
-      setStatus(`${state.trackDefs.length}개 트랙 · ${clipCount}개 클립을 준비했습니다.`, "idle");
+      const emptyCount = state.trackDefs.filter((def) => !def.base && !state.buffers[def.key]).length;
+      setStatus(`${state.trackDefs.length}개 트랙 · ${clipCount}개 클립${emptyCount ? ` · 빈 트랙 ${emptyCount}개` : ""}를 준비했습니다.`, "idle");
     } catch (error) {
       state.buffers = {}; state.originalBuffer = null; state.trackDefs = []; state.timeline.selectedTrackKey = ""; state.timeline.selectedClipId = "";
       renderExtraStructure(); calculateDuration(); renderControls();
@@ -887,6 +913,7 @@
     card.querySelector('[data-action="solo"]')?.addEventListener("click", () => toggleTrackFlag(def.key, "solo"));
     card.querySelector('[data-action="play"]')?.addEventListener("click", () => playOnly(def.key));
     card.querySelector('[data-action="reset"]')?.addEventListener("click", () => resetTrack(def.key));
+    card.querySelector('[data-action="target"]')?.addEventListener("click", () => selectTrack(def.key, { scroll: true }));
     card.querySelector('[data-action="delete"]')?.addEventListener("click", () => deleteExtraTrack(def));
     card.addEventListener("click", (event) => { if (!event.target.closest("button,input,select,summary")) selectTrack(def.key); });
     renderExtraTrackControls(def);
@@ -1217,6 +1244,63 @@
     if (!state.exportUrl || !state.exportBlob) return; const link = document.createElement("a"); link.href = state.exportUrl; link.download = `${safeName($("mixerExportName")?.value)}.wav`; document.body.appendChild(link); link.click(); link.remove();
   }
 
+  function getSelectedExtraDef() {
+    const def = getTrackDef(state.timeline.selectedTrackKey);
+    return def && !def.base ? def : null;
+  }
+
+  function updateRecordTargetUi({ syncStart = false } = {}) {
+    const def = getSelectedExtraDef();
+    const target = $("mixerRecordTarget");
+    const startInput = $("mixerRecordStartPosition");
+    if (target) {
+      target.textContent = def
+        ? `${def.name} · ${state.buffers[def.key] ? "기존 녹음 교체 가능" : "빈 트랙"}`
+        : "추가 트랙을 선택해 주세요.";
+    }
+    if (startInput) {
+      startInput.max = String(Math.max(0, state.mixDuration || state.duration || 0));
+      if (syncStart && def && !state.overdub.active) startInput.value = String(Number(currentPosition()).toFixed(2));
+    }
+  }
+
+  function useCurrentPlayheadForRecording() {
+    const input = $("mixerRecordStartPosition");
+    if (!input) return;
+    input.value = String(Number(currentPosition()).toFixed(2));
+    setStatus(`녹음 시작 위치를 ${formatTime(currentPosition())}로 설정했습니다.`, "idle");
+  }
+
+  async function addEmptyTrack() {
+    if (!state.recording || state.overdub.active || state.exporting) return;
+    const extraCount = state.trackDefs.filter((def) => !def.base).length;
+    if (extraCount >= OVERDUB_MAX_TRACKS) { setStatus(`추가 트랙은 현재 ${OVERDUB_MAX_TRACKS}개까지 지원합니다.`, "error"); return; }
+    const input = $("mixerNewTrackName");
+    const name = String(input?.value || "").trim().slice(0, 40) || `추가 트랙 ${extraCount + 1}`;
+    const track = {
+      id: crypto.randomUUID?.() || `track-${Date.now()}`,
+      name,
+      blob: null,
+      empty: true,
+      createdAt: Date.now(),
+      durationMs: 0,
+      trimStartMs: 0,
+      offsetMs: 0
+    };
+    try {
+      const updated = await state.callbacks.createEmptyTrack?.(state.recording, track);
+      if (input) input.value = "";
+      if (updated) {
+        await loadRecording(updated);
+        selectTrack(getTrackKey(track), { scroll: true });
+      }
+      setStatus(`‘${name}’ 빈 트랙을 추가했습니다. 시작 위치를 정한 뒤 녹음하세요.`, "idle");
+      if ($("mixerOverdubStatus")) $("mixerOverdubStatus").textContent = `‘${name}’ 트랙이 준비되었습니다. 타임라인 재생선을 옮기거나 시작 시간을 입력하세요.`;
+    } catch (error) {
+      setStatus(`빈 트랙을 추가하지 못했습니다: ${error.message}`, "error");
+    }
+  }
+
   function preferredMimeType() {
     return ["audio/webm;codecs=opus", "audio/webm", "audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/ogg;codecs=opus"].find((type) => window.MediaRecorder?.isTypeSupported?.(type)) || "";
   }
@@ -1236,7 +1320,7 @@
     state.overdub.countInNodes.forEach((node) => { try { node.stop?.(); } catch {} try { node.disconnect?.(); } catch {} });
     try { state.overdub.source?.disconnect(); } catch {} try { state.overdub.gate?.disconnect(); } catch {} try { state.overdub.analyser?.disconnect(); } catch {}
     state.overdub.stream?.getTracks?.().forEach((track) => track.stop());
-    Object.assign(state.overdub, { active: false, recorder: null, stream: null, chunks: [], source: null, gate: null, destination: null, analyser: null, levelData: null, levelFrame: null, startAt: 0, recorderStartAt: 0, timerId: null, autoStopTimer: null, countInNodes: [], stopping: false });
+    Object.assign(state.overdub, { active: false, recorder: null, stream: null, chunks: [], source: null, gate: null, destination: null, analyser: null, levelData: null, levelFrame: null, startAt: 0, recorderStartAt: 0, timerId: null, autoStopTimer: null, countInNodes: [], stopping: false, targetTrackId: "", recordStartSec: 0, timelineRawStartSec: 0 });
     if ($("mixerOverdubTimer")) $("mixerOverdubTimer").textContent = "00:00";
     if ($("mixerOverdubLevel")) $("mixerOverdubLevel").style.width = "0%";
     updateAvailability();
@@ -1253,8 +1337,14 @@
   async function startOverdub() {
     if (state.overdub.active || !state.recording) return;
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { setStatus("추가 트랙 녹음은 HTTPS 또는 PC 실행 파일의 최신 Chrome·Edge에서 사용할 수 있습니다.", "error"); return; }
-    const extraCount = state.trackDefs.filter((def) => !def.base).length;
-    if (extraCount >= OVERDUB_MAX_TRACKS) { setStatus(`추가 녹음 트랙은 현재 ${OVERDUB_MAX_TRACKS}개까지 지원합니다.`, "error"); return; }
+    const targetDef = getSelectedExtraDef();
+    if (!targetDef?.data?.id) { setStatus("먼저 녹음할 추가 트랙을 선택해 주세요.", "error"); return; }
+    if (state.buffers[targetDef.key] && !confirm(`‘${targetDef.name}’ 트랙의 기존 녹음을 새 녹음으로 교체할까요?`)) return;
+    const maxStart = Math.max(0, state.mixDuration || state.duration || 0);
+    const startValue = String($("mixerRecordStartPosition")?.value ?? "").trim();
+    const requestedStart = startValue === "" ? currentPosition() : Number(startValue);
+    const recordStartSec = clamp(Number.isFinite(requestedStart) ? requestedStart : currentPosition(), 0, maxStart);
+    if (maxStart - recordStartSec < 0.25) { setStatus("녹음 시작 위치가 곡의 끝과 너무 가깝습니다.", "error"); return; }
     state.callbacks.stopOtherAudio?.(); stop({ silent: true, keepOverdub: true });
     try {
       const context = ensureContext(); const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false });
@@ -1262,18 +1352,25 @@
       gate.gain.value = 0; source.connect(gate); gate.connect(destination); source.connect(analyser);
       const mimeType = preferredMimeType(); const recorder = mimeType ? new MediaRecorder(destination.stream, { mimeType }) : new MediaRecorder(destination.stream);
       const countIn = $("mixerOverdubCountIn")?.checked ? 3 : 0; const leadSeconds = countIn ? countIn + 0.12 : 0.18; const recorderStartAt = context.currentTime; const startAt = recorderStartAt + leadSeconds;
-      Object.assign(state.overdub, { active: true, recorder, stream, chunks: [], source, gate, destination, analyser, levelData: new Uint8Array(analyser.fftSize), startAt, recorderStartAt, stopping: false });
+      const currentModel = timelineModel();
+      Object.assign(state.overdub, {
+        active: true, recorder, stream, chunks: [], source, gate, destination, analyser,
+        levelData: new Uint8Array(analyser.fftSize), startAt, recorderStartAt, stopping: false,
+        targetTrackId: String(targetDef.data.id), recordStartSec,
+        timelineRawStartSec: recordStartSec - Number(currentModel.shiftSec || 0)
+      });
       recorder.ondataavailable = (event) => { if (event.data?.size) state.overdub.chunks.push(event.data); };
       recorder.onerror = (event) => setStatus(`추가 트랙 녹음 오류: ${event.error?.message || "알 수 없는 오류"}`, "error");
       recorder.start(1000); gate.gain.setValueAtTime(0, context.currentTime); gate.gain.setValueAtTime(1, startAt);
       if (countIn) scheduleCountIn(context, startAt);
-      if (!startPlaybackAt(0, startAt, { overdub: true })) throw new Error("현재 믹스를 재생할 수 없습니다.");
+      if (!startPlaybackAt(recordStartSec, startAt, { overdub: true, excludeTrackKey: targetDef.key })) throw new Error("선택한 시작 위치에서 현재 믹스를 재생할 수 없습니다.");
       state.overdub.timerId = window.setInterval(() => { const elapsed = Math.max(0, context.currentTime - startAt); if ($("mixerOverdubTimer")) $("mixerOverdubTimer").textContent = formatTime(elapsed); }, 100);
-      state.overdub.autoStopTimer = window.setTimeout(() => finishOverdub(), Math.max(500, (state.mixDuration + leadSeconds) * 1000 + 120));
-      runOverdubLevel(); updateAvailability(); setStatus("현재 믹스를 들으며 추가 트랙을 녹음합니다.", "recording");
-      if ($("mixerOverdubStatus")) $("mixerOverdubStatus").textContent = countIn ? "3초 카운트인 뒤 녹음이 시작됩니다. 이어폰을 사용하세요." : "잠시 후 녹음이 시작됩니다. 이어폰을 사용하세요.";
-      state.callbacks.transportUpdate?.(state.recording.name || "믹서", "추가 트랙 녹음 중", true, "recording");
-    } catch (error) { cleanupOverdub(); stop({ silent: true, keepOverdub: true }); setStatus(`추가 트랙 녹음을 시작하지 못했습니다: ${error.message}`, "error"); }
+      const remaining = Math.max(0.25, state.mixDuration - recordStartSec);
+      state.overdub.autoStopTimer = window.setTimeout(() => finishOverdub(), Math.max(500, (remaining + leadSeconds) * 1000 + 120));
+      runOverdubLevel(); updateAvailability(); setStatus(`${formatTime(recordStartSec)}부터 ‘${targetDef.name}’ 트랙을 녹음합니다.`, "recording");
+      if ($("mixerOverdubStatus")) $("mixerOverdubStatus").textContent = countIn ? `${formatTime(recordStartSec)} 위치에서 3초 카운트인 뒤 녹음합니다.` : `${formatTime(recordStartSec)} 위치에서 곧 녹음합니다.`;
+      state.callbacks.transportUpdate?.(state.recording.name || "믹서", `${targetDef.name} 구간 녹음 중`, true, "recording");
+    } catch (error) { cleanupOverdub(); stop({ silent: true, keepOverdub: true }); setStatus(`선택 트랙 녹음을 시작하지 못했습니다: ${error.message}`, "error"); }
   }
 
   async function finishOverdub() {
@@ -1281,19 +1378,27 @@
     clearTimeout(overdub.autoStopTimer); try { overdub.gate?.gain?.setValueAtTime(0, state.context?.currentTime || 0); } catch {}
     stop({ preservePosition: false, silent: true, keepOverdub: true });
     const recorder = overdub.recorder; const chunks = overdub.chunks; const startAt = overdub.startAt; const recorderStartAt = overdub.recorderStartAt;
+    const targetTrackId = overdub.targetTrackId; const recordStartSec = overdub.recordStartSec; const timelineRawStartSec = overdub.timelineRawStartSec;
+    const targetDef = state.trackDefs.find((def) => !def.base && String(def.data?.id) === String(targetTrackId));
     try {
       const stopped = new Promise((resolve) => { if (!recorder || recorder.state === "inactive") resolve(); else recorder.addEventListener("stop", resolve, { once: true }); });
       if (recorder && recorder.state !== "inactive") recorder.stop(); await stopped;
       const mimeType = recorder?.mimeType || chunks[0]?.type || "audio/webm"; const blob = new Blob(chunks, { type: mimeType });
-      const durationMs = Math.max(0, Math.min(state.mixDuration * 1000, ((state.context?.currentTime || startAt) - startAt) * 1000));
+      const availableMs = Math.max(0, (state.mixDuration - recordStartSec) * 1000);
+      const durationMs = Math.max(0, Math.min(availableMs, ((state.context?.currentTime || startAt) - startAt) * 1000));
       if (!blob.size || durationMs < 250) throw new Error("녹음된 내용이 너무 짧습니다.");
-      const inputName = String($("mixerOverdubName")?.value || "").trim().slice(0, 40);
-      const track = { id: crypto.randomUUID?.() || `track-${Date.now()}`, name: inputName || `추가 녹음 ${state.trackDefs.filter((def) => !def.base).length + 1}`, blob, mimeType, createdAt: Date.now(), durationMs, trimStartMs: Math.max(0, Math.round((startAt - recorderStartAt) * 1000)), offsetMs: 0 };
-      const updated = await state.callbacks.addExtraTrack?.(state.recording, track);
-      cleanupOverdub(); if ($("mixerOverdubName")) $("mixerOverdubName").value = "";
-      if (updated) { await loadRecording(updated); selectTrack(getTrackKey(track), { scroll: true }); }
-      setStatus(`‘${track.name}’ 트랙을 믹서에 추가했습니다.`, "idle"); if ($("mixerOverdubStatus")) $("mixerOverdubStatus").textContent = "새 트랙을 추가했습니다. 음량과 위치를 조절해 주세요.";
-    } catch (error) { cleanupOverdub(); setStatus(`추가 트랙을 저장하지 못했습니다: ${error.message}`, "error"); }
+      const patch = {
+        blob, mimeType, empty: false, recordedAt: Date.now(), durationMs,
+        trimStartMs: Math.max(0, Math.round((startAt - recorderStartAt) * 1000)),
+        offsetMs: 0, timelineStartSec: timelineRawStartSec
+      };
+      const updated = await state.callbacks.updateExtraTrack?.(state.recording, targetTrackId, patch, { resetMix: true });
+      const trackName = targetDef?.name || "추가 트랙";
+      cleanupOverdub();
+      if (updated) { await loadRecording(updated); selectTrack(`extra:${targetTrackId}`, { scroll: true }); }
+      setStatus(`‘${trackName}’ 트랙에 ${formatTime(recordStartSec)}부터 녹음을 배치했습니다.`, "idle");
+      if ($("mixerOverdubStatus")) $("mixerOverdubStatus").textContent = "녹음을 저장했습니다. 파형을 이동하거나 분할해 세부 위치를 조절할 수 있습니다.";
+    } catch (error) { cleanupOverdub(); setStatus(`선택 트랙 녹음을 저장하지 못했습니다: ${error.message}`, "error"); }
   }
 
   function bindClipInspector() {
@@ -1352,7 +1457,10 @@
     seek?.addEventListener("input", () => { state.seeking = true; state.position = clamp(seek.value, 0, state.duration); updateTimeUi(); });
     ["change", "pointerup", "pointercancel"].forEach((eventName) => seek?.addEventListener(eventName, () => { const wasPlaying = state.playing; const next = clamp(seek.value, 0, state.duration); state.seeking = false; state.position = next; if (wasPlaying && !state.overdub.active) play(next); else updateTimeUi(); }));
     $("mixerExportWav")?.addEventListener("click", exportWav); $("mixerExportDownload")?.addEventListener("click", downloadExport);
-    $("mixerOverdubStart")?.addEventListener("click", startOverdub); $("mixerOverdubStop")?.addEventListener("click", finishOverdub);
+    $("mixerAddTrack")?.addEventListener("click", addEmptyTrack);
+    $("mixerNewTrackName")?.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); addEmptyTrack(); } });
+    $("mixerRecordUsePlayhead")?.addEventListener("click", useCurrentPlayheadForRecording);
+    $("mixerTrackRecordStart")?.addEventListener("click", startOverdub); $("mixerTrackRecordStop")?.addEventListener("click", finishOverdub);
     document.addEventListener("keydown", (event) => {
       const mixerActive = $("mixer")?.classList.contains("is-active");
       if (!mixerActive || event.target.closest("input,textarea,select,[contenteditable=true]") || state.overdub.active) return;

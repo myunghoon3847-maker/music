@@ -2692,7 +2692,7 @@ function renderRecordings() {
     title.textContent = recording.name || "보컬 녹음";
     titleLine.appendChild(title);
     const storedTrackCount = [recording.vocalBlob, recording.mrBlob].filter((blob) => blob instanceof Blob).length
-      + (Array.isArray(recording.extraTracks) ? recording.extraTracks.filter((track) => track?.blob instanceof Blob).length : 0);
+      + (Array.isArray(recording.extraTracks) ? recording.extraTracks.length : 0);
     if (storedTrackCount > 0) {
       const tag = document.createElement("span");
       tag.className = "recording-mr-tag is-tracks";
@@ -2725,12 +2725,12 @@ function renderRecordings() {
     const player = createRecordingPlayer(recording, objectUrl);
 
     let trackPanel = null;
-    if (recording.vocalBlob || recording.mrBlob || (Array.isArray(recording.extraTracks) && recording.extraTracks.some((track) => track?.blob instanceof Blob))) {
+    if (recording.vocalBlob || recording.mrBlob || (Array.isArray(recording.extraTracks) && recording.extraTracks.length)) {
       trackPanel = document.createElement("details");
       trackPanel.className = "recording-track-panel";
       const summary = document.createElement("summary");
       const trackCount = [recording.vocalBlob, recording.mrBlob].filter((blob) => blob instanceof Blob).length
-        + (Array.isArray(recording.extraTracks) ? recording.extraTracks.filter((track) => track?.blob instanceof Blob).length : 0);
+        + (Array.isArray(recording.extraTracks) ? recording.extraTracks.length : 0);
       summary.textContent = `분리 트랙 ${trackCount}개`;
       trackPanel.appendChild(summary);
 
@@ -2738,29 +2738,32 @@ function renderRecordings() {
       trackList.className = "recording-track-list";
 
       const addTrackRow = (label, detail, trackBlob, mimeType, filename) => {
-        if (!(trackBlob instanceof Blob)) return;
         const row = document.createElement("div");
         row.className = "recording-track-row";
         const info = document.createElement("div");
         const strong = document.createElement("strong");
         strong.textContent = label;
         const span = document.createElement("span");
-        span.textContent = `${detail} · ${formatFileSize(trackBlob.size)}`;
+        const hasBlob = trackBlob instanceof Blob;
+        span.textContent = hasBlob ? `${detail} · ${formatFileSize(trackBlob.size)}` : `${detail} · 빈 트랙`;
         info.append(strong, span);
-        const url = URL.createObjectURL(trackBlob);
-        state.recordingObjectUrls.push(url);
         const button = document.createElement("button");
         button.type = "button";
         button.className = "recording-small-btn";
-        button.textContent = "트랙 저장";
-        button.addEventListener("click", () => {
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = `${safeRecordingFilename(filename)}.${recordingExtension(mimeType || trackBlob.type)}`;
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-        });
+        button.textContent = hasBlob ? "트랙 저장" : "녹음 대기";
+        button.disabled = !hasBlob;
+        if (hasBlob) {
+          const url = URL.createObjectURL(trackBlob);
+          state.recordingObjectUrls.push(url);
+          button.addEventListener("click", () => {
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `${safeRecordingFilename(filename)}.${recordingExtension(mimeType || trackBlob.type)}`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+          });
+        }
         row.append(info, button);
         trackList.appendChild(row);
       };
@@ -2787,7 +2790,7 @@ function renderRecordings() {
     actions.className = "recording-item-actions";
 
     let openMixerButton = null;
-    if (recording.vocalBlob || recording.mrBlob || (Array.isArray(recording.extraTracks) && recording.extraTracks.some((track) => track?.blob instanceof Blob))) {
+    if (recording.vocalBlob || recording.mrBlob || (Array.isArray(recording.extraTracks) && recording.extraTracks.length)) {
       openMixerButton = document.createElement("button");
       openMixerButton.type = "button";
       openMixerButton.className = "recording-small-btn is-mixer";
@@ -3588,13 +3591,38 @@ async function saveMixerSettings(recording, mixSettings) {
   return updated;
 }
 
-async function addMixerExtraTrack(recording, track) {
+async function createMixerEmptyTrack(recording, track) {
   const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
   const extraTracks = [...(Array.isArray(latest.extraTracks) ? latest.extraTracks : []), track];
   const updated = {
     ...latest,
     extraTracks,
-    trackVersion: Math.max(3, Number(latest.trackVersion) || 0),
+    trackVersion: Math.max(4, Number(latest.trackVersion) || 0),
+    updatedAt: Date.now()
+  };
+  if (!recording.volatile) await putStoredRecording(updated);
+  state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+  window.HoonProjects?.touch?.(updated.projectId);
+  renderProjectUi();
+  renderRecordings();
+  return updated;
+}
+
+async function updateMixerExtraTrack(recording, trackId, patch, options = {}) {
+  const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+  const extraTracks = (Array.isArray(latest.extraTracks) ? latest.extraTracks : []).map((track) =>
+    String(track.id) === String(trackId) ? { ...track, ...patch, id: track.id, updatedAt: Date.now() } : track
+  );
+  let mixSettings = latest.mixSettings ? { ...latest.mixSettings } : latest.mixSettings;
+  if (options.resetMix && mixSettings) {
+    mixSettings = { ...mixSettings };
+    delete mixSettings[`extra:${trackId}`];
+  }
+  const updated = {
+    ...latest,
+    extraTracks,
+    mixSettings,
+    trackVersion: Math.max(4, Number(latest.trackVersion) || 0),
     updatedAt: Date.now()
   };
   if (!recording.volatile) await putStoredRecording(updated);
@@ -3643,7 +3671,8 @@ function setupMixer() {
     getRecordings: () => visibleRecordings(),
     getAudioContext: ensureAudioContext,
     saveSettings: saveMixerSettings,
-    addExtraTrack: addMixerExtraTrack,
+    createEmptyTrack: createMixerEmptyTrack,
+    updateExtraTrack: updateMixerExtraTrack,
     removeExtraTrack: removeMixerExtraTrack,
     recordExport: recordMixerExport,
     stopOtherAudio: stopAudioForMixer,

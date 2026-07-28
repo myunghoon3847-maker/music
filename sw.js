@@ -1,4 +1,4 @@
-const CACHE_NAME = "hoon-music-tool-v1.9.3-clip-split-editor";
+const CACHE_NAME = "hoon-music-tool-v1.9.4-positioned-track-recording";
 const APP_SHELL = [
   "./",
   "./index.html",

@@ -3257,3 +3257,113 @@ input, select, textarea { font-size: 16px; }
   .mixer-clip-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mixer-clip-inspector-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* =========================================================
+   v1.9.4 EMPTY TRACK + POSITIONED RECORDING
+   ========================================================= */
+.mixer-track-action-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, .82fr) minmax(360px, 1.45fr);
+  gap: 10px;
+}
+.mixer-track-action-card {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #dedfe9;
+  border-radius: 13px;
+  background: #fff;
+}
+.mixer-track-action-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.mixer-track-action-heading > span {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  color: #fff;
+  background: #20988d;
+  font-size: .66rem;
+  font-weight: 950;
+}
+.mixer-track-action-heading > div { display: grid; gap: 2px; min-width: 0; }
+.mixer-track-action-heading strong { font-size: .76rem; }
+.mixer-track-action-heading small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: .6rem;
+  font-weight: 750;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mixer-track-action-card label > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: .62rem;
+  font-weight: 850;
+}
+.mixer-track-action-card input[type="text"],
+.mixer-track-action-card input[type="number"] {
+  width: 100%;
+  min-height: 42px;
+}
+.mixer-record-start-grid {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(126px, auto);
+  align-items: end;
+  gap: 8px;
+}
+.mixer-record-action-buttons {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(105px, .62fr);
+  gap: 8px;
+}
+.mixer-track-state {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 3px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #2e726a;
+  background: #e2f5f1;
+  font-size: .53rem;
+  font-weight: 900;
+}
+.mixer-track-card.is-empty .mixer-track-state {
+  color: #796224;
+  background: #fff1c9;
+}
+.mixer-track-card.is-empty {
+  border-style: dashed;
+  background: linear-gradient(180deg, #fffdf7, #fff);
+}
+.mixer-mini-btn.is-record-target {
+  color: #147d73;
+  border-color: #9dd9d2;
+  background: #eefaf8;
+}
+.mixer-track-card.is-selected .mixer-mini-btn.is-record-target {
+  color: #fff;
+  border-color: #168a80;
+  background: #168a80;
+}
+
+@media (max-width: 899px) {
+  .mixer-track-action-grid { grid-template-columns: 1fr; }
+  .mixer-track-action-heading small { white-space: normal; }
+}
+
+@media (max-width: 520px) {
+  .mixer-record-start-grid,
+  .mixer-record-action-buttons { grid-template-columns: 1fr; }
+  .mixer-track-action-card { padding: 11px; }
+}
