@@ -27,6 +27,9 @@
         <button id="shareBtn" class="icon-btn header-btn" type="button" aria-label="훈뮤직툴 주소 공유">공유</button>
         <button id="installBtn" class="icon-btn install-btn" type="button" aria-label="앱 설치">설치</button>
       </div>
+      <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="사이드바 접기" aria-expanded="true">
+        <span aria-hidden="true">⇤</span><b>메뉴 접기</b>
+      </button>
     </header>
 
     <aside id="mobileReadyBanner" class="mobile-ready-banner" hidden>
@@ -301,6 +304,18 @@
             </div>
             <span id="recordingStatusBadge" class="recording-status-badge">준비</span>
           </div>
+          <section class="project-strip" aria-label="녹음 프로젝트">
+            <div class="project-main">
+              <label for="projectSelect">작업 프로젝트</label>
+              <select id="projectSelect" aria-label="녹음 프로젝트 선택"><option value="project-default">기본 녹음 프로젝트</option></select>
+              <span id="projectSummary" class="project-summary">프로젝트를 준비하고 있습니다.</span>
+            </div>
+            <div class="project-actions">
+              <button id="newProject" class="secondary-btn" type="button">새 프로젝트</button>
+              <button id="editProject" class="secondary-btn" type="button">정보 수정</button>
+              <button id="deleteProject" class="secondary-btn is-danger" type="button">삭제</button>
+            </div>
+          </section>
           <section class="recorder-panel" aria-labelledby="recording-page-title">
             <div class="recording-workbench-primary">
             <div class="mr-studio" aria-labelledby="mr-studio-title">
@@ -568,10 +583,50 @@
       </section>
     </main>
 
+    <section id="studioTransport" class="studio-transport" aria-label="공통 재생 제어" data-mode="idle">
+      <div class="transport-now">
+        <span class="transport-dot" aria-hidden="true"></span>
+        <div>
+          <strong id="transportSource">준비</strong>
+          <span id="transportStatus">대기 중</span>
+        </div>
+      </div>
+      <div class="transport-shortcuts" aria-label="키보드 단축키">Space 재생 · R 녹음 · Esc 정지</div>
+      <div class="transport-actions">
+        <button id="transportPlay" type="button" aria-keyshortcuts="Space">재생</button>
+        <button id="transportStop" type="button" aria-keyshortcuts="Escape">정지</button>
+        <button id="transportRecord" class="is-record" type="button" aria-keyshortcuts="R">● 녹음</button>
+      </div>
+    </section>
+
     <footer>
-      <p>PC 작업실 · 모바일 앱 반응형 UI · v1.8</p>
+      <p>PC 작업실 · 프로젝트 기반 · 공통 재생 제어 · v1.8.1</p>
     </footer>
   </div>
+
+  <dialog id="projectDialog" class="project-dialog">
+    <form id="projectForm" method="dialog">
+      <div class="project-dialog-heading">
+        <div>
+          <p class="section-kicker">RECORDING PROJECT</p>
+          <h2 id="projectDialogTitle">새 프로젝트</h2>
+        </div>
+        <button id="closeProjectDialog" class="sheet-close" type="button" aria-label="닫기">×</button>
+      </div>
+      <label>
+        <span>프로젝트 이름</span>
+        <input id="projectNameInput" type="text" maxlength="48" required placeholder="예: 새 싱글 데모" autocomplete="off" />
+      </label>
+      <label>
+        <span>프로젝트 메모 <small>선택</small></span>
+        <textarea id="projectMemoInput" rows="4" maxlength="300" placeholder="곡 키, 녹음 방향, 확인할 내용"></textarea>
+      </label>
+      <div class="project-dialog-actions">
+        <button id="cancelProjectDialog" class="secondary-btn" type="button">취소</button>
+        <button id="saveProjectDialog" class="primary-btn" type="submit">저장</button>
+      </div>
+    </form>
+  </dialog>
 
   <div id="installSheet" class="install-sheet" hidden>
     <button id="installSheetBackdrop" class="install-sheet-backdrop" type="button" aria-label="설치 안내 닫기"></button>
@@ -589,6 +644,8 @@
     </section>
   </div>
 
+  <script src="core/projects.js" defer></script>
+  <script src="core/transport.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>

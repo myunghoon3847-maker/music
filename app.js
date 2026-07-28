@@ -114,7 +114,9 @@ const state = {
   recordingCountdownNodes: [],
   recordingSessionToken: 0,
   mrResumeAfterPause: false,
-  currentRecordingMeta: null
+  currentRecordingMeta: null,
+  currentTab: "chords",
+  projectDialogMode: "create"
 };
 
 const NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -368,6 +370,31 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+const TAB_LABELS = {
+  chords: "코드 진행",
+  vocalTune: "보컬튠",
+  recording: "녹음실",
+  metronome: "메트로놈",
+  tuner: "튜너"
+};
+
+function transportUpdate(source, status, active = false, mode = "idle") {
+  window.HoonTransport?.update({ source, status, active, mode });
+}
+
+function currentProjectId() {
+  return window.HoonProjects?.getCurrentId?.() || "project-default";
+}
+
+function normalizedProjectId(recording) {
+  return window.HoonProjects?.normalizeRecordingProjectId?.(recording?.projectId) || recording?.projectId || "project-default";
+}
+
+function visibleRecordings() {
+  const projectId = currentProjectId();
+  return state.recordings.filter((recording) => normalizedProjectId(recording) === projectId);
+}
+
 function tempoDescription(bpm) {
   if (bpm < 50) return "매우 느리게";
   if (bpm < 70) return "느리게";
@@ -451,6 +478,7 @@ function startMetronome() {
   state.nextNoteTime = audio.currentTime + 0.05;
   state.schedulerId = window.setInterval(scheduler, 25);
   $("#toggleMetronome").textContent = "정지";
+  transportUpdate("메트로놈", `${$("#bpmSlider").value} BPM 재생 중`, true, "playing");
 }
 
 function stopMetronome() {
@@ -459,6 +487,7 @@ function stopMetronome() {
   state.schedulerId = null;
   clearBeatTimers();
   $("#toggleMetronome").textContent = "시작";
+  if (state.currentTab === "metronome") transportUpdate("메트로놈", "정지됨", false, "idle");
 }
 
 function toggleMetronome() {
@@ -843,8 +872,10 @@ function playProgression() {
       state.chordTimers.push(window.setTimeout(() => {
         state.progressionPlaying = false;
         clearChordHighlights();
+        if (state.currentTab === "chords") transportUpdate("코드 진행", "재생 완료", false, "idle");
       }, finishDelay));
     }
+    transportUpdate("코드 진행", `${state.progression.map((chord) => chord.symbol).join(" – ")} 재생 중`, true, "playing");
     savePlaybackSettings();
   } catch (error) {
     alert(error.message);
@@ -875,6 +906,7 @@ function stopProgression() {
     try { oscillator.stop(); } catch {}
   });
   state.chordOscillators = [];
+  if (state.currentTab === "chords") transportUpdate("코드 진행", "정지됨", false, "idle");
 }
 
 async function copyProgression() {
@@ -1338,6 +1370,7 @@ async function startTuner() {
     $("#toggleTuner").textContent = "튜너 정지";
     setTunerBadge("듣는 중", "listening");
     resetTunerDisplay("악기 한 음을 길게 연주해 주세요.");
+    transportUpdate("튜너", "마이크 음정 분석 중", true, "analysis");
     runTunerAnalysis();
   } catch (error) {
     if (requestToken !== state.tunerRequestToken) return;
@@ -1370,6 +1403,7 @@ function stopTuner(reset = true) {
     resetTunerDisplay();
     setTunerBadge("대기 중");
   }
+  if (state.currentTab === "tuner") transportUpdate("튜너", "대기 중", false, "idle");
 }
 
 function toggleTuner() {
@@ -1703,6 +1737,7 @@ async function startVocalTune() {
     $("#toggleVocalTune").disabled = false;
     $("#toggleVocalTune").textContent = "보컬튠 정지";
     setVocalBadge("듣는 중", "listening");
+    transportUpdate("보컬튠", "실시간 음정 분석 중", true, "analysis");
     resetVocalDisplay("한 음을 길고 또렷하게 불러 주세요.");
     runVocalAnalysis();
   } catch (error) {
@@ -1788,6 +1823,7 @@ function stopVocalTune(reset = true) {
     resetVocalDisplay("한 음을 길고 편안하게 불러 주세요.");
     setVocalBadge("대기 중");
   }
+  if (state.currentTab === "vocalTune") transportUpdate("보컬튠", "대기 중", false, "idle");
 }
 
 function toggleVocalTune() {
@@ -1986,6 +2022,10 @@ function setMrRecordingLocked(locked) {
   $("#mrSyncMinus").disabled = locked;
   $("#mrSyncPlus").disabled = locked;
   $("#mrSyncReset").disabled = locked;
+  $("#projectSelect").disabled = locked;
+  $("#newProject").disabled = locked;
+  $("#editProject").disabled = locked;
+  $("#deleteProject").disabled = locked || currentProjectId() === window.HoonProjects?.DEFAULT_ID;
   $(".recorder-panel").classList.toggle("is-recording", locked);
 }
 
@@ -2542,6 +2582,11 @@ function createRecordingPlayer(recording, objectUrl) {
 
   playButton.addEventListener("click", async () => {
     if (audio.paused || audio.ended) {
+      stopMetronome();
+      stopProgression();
+      stopTuner();
+      stopVocalTune();
+      $("#mrAudio")?.pause();
       pauseOtherRecordingPlayers(audio);
       if (audio.ended || Number(audio.currentTime) >= expectedDuration - 0.05) {
         try { audio.currentTime = 0; } catch {}
@@ -2571,18 +2616,21 @@ function createRecordingPlayer(recording, objectUrl) {
 
   audio.addEventListener("play", () => {
     state.activeRecordingAudio = audio;
+    transportUpdate(recording.name || "저장된 녹음", "재생 중", true, "playing");
     playButton.textContent = "❚❚";
     playButton.setAttribute("aria-label", "녹음 일시정지");
     stopFrame();
     runFrame();
   });
   audio.addEventListener("pause", () => {
+    if (state.activeRecordingAudio === audio && !audio.ended) transportUpdate(recording.name || "저장된 녹음", "일시정지", false, "idle");
     playButton.textContent = "▶";
     playButton.setAttribute("aria-label", "녹음 재생");
     stopFrame();
     update();
   });
   audio.addEventListener("ended", () => {
+    if (state.activeRecordingAudio === audio) transportUpdate(recording.name || "저장된 녹음", "재생 완료", false, "idle");
     playButton.textContent = "▶";
     playButton.setAttribute("aria-label", "녹음 다시 재생");
     stopFrame();
@@ -2613,14 +2661,15 @@ function renderRecordings() {
   const list = $("#recordingList");
   revokeRecordingObjectUrls();
   list.innerHTML = "";
-  const sorted = [...state.recordings].sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+  const sorted = [...visibleRecordings()].sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
   $("#recordingCount").textContent = `${sorted.length}개`;
+  updateProjectSummary();
   $("#deleteAllRecordings").disabled = sorted.length === 0;
 
   if (!sorted.length) {
     const empty = document.createElement("div");
     empty.className = "recording-empty";
-    empty.innerHTML = "<strong>저장된 녹음이 없습니다.</strong><span>녹음이 끝나면 제목과 메모를 남길 수 있습니다.</span>";
+    empty.innerHTML = "<strong>이 프로젝트에 저장된 녹음이 없습니다.</strong><span>녹음을 시작하면 현재 프로젝트에 자동으로 정리됩니다.</span>";
     list.appendChild(empty);
     return;
   }
@@ -2843,7 +2892,16 @@ function renderRecordings() {
 
 async function loadRecordings() {
   try {
-    state.recordings = await getStoredRecordings();
+    const loaded = await getStoredRecordings();
+    const migrated = [];
+    state.recordings = loaded.map((recording) => {
+      if (recording.projectId) return recording;
+      const updated = { ...recording, projectId: window.HoonProjects?.DEFAULT_ID || "project-default" };
+      if (!recording.volatile) migrated.push(updated);
+      return updated;
+    });
+    if (migrated.length) await Promise.allSettled(migrated.map((recording) => putStoredRecording(recording)));
+    renderProjectUi();
     renderRecordings();
   } catch (error) {
     state.recordings = [];
@@ -2965,6 +3023,10 @@ function resetRecordingControls() {
   setRecordingBadge("준비");
   setMrRecordingLocked(false);
   stopRecordingLevelMonitor();
+  if (state.currentTab === "recording") {
+    const projectName = window.HoonProjects?.getCurrent?.()?.name || "녹음 프로젝트";
+    transportUpdate("녹음실", `${projectName} · 준비`, false, "idle");
+  }
 }
 
 async function finishRecording(blob, durationMs, mimeType, vocalTrackResult = null) {
@@ -2976,6 +3038,7 @@ async function finishRecording(blob, durationMs, mimeType, vocalTrackResult = nu
   const record = {
     name,
     memo,
+    projectId: meta.projectId || currentProjectId(),
     createdAt: Date.now(),
     durationMs,
     mimeType: mimeType || blob.type || "audio/webm",
@@ -3004,8 +3067,10 @@ async function finishRecording(blob, durationMs, mimeType, vocalTrackResult = nu
     state.recordings.unshift({ ...record, id: `memory-${Date.now()}`, volatile: true });
     $("#recordingMessage").textContent = `${error.message} 녹음은 현재 화면에서 임시로 재생·파일 저장할 수 있습니다.`;
   }
+  window.HoonProjects?.touch?.(record.projectId);
   $("#recordingName").value = "";
   $("#recordingMemo").value = "";
+  renderProjectUi();
   renderRecordings();
 }
 
@@ -3048,6 +3113,7 @@ async function startRecording() {
     $("#toggleRecording").textContent = "마이크 확인 중...";
     $("#recordingStateText").textContent = "마이크와 MR을 준비하고 있습니다.";
     setRecordingBadge("준비 중", "saving");
+    transportUpdate("녹음실", "마이크와 MR 준비 중", true, "recording");
     setMrRecordingLocked(true);
 
     let stream = state.vocalStream;
@@ -3080,6 +3146,7 @@ async function startRecording() {
     const startAt = context.currentTime + countInSeconds + 0.22;
     const mixed = createMixedRecordingStream(stream, startAt);
     state.currentRecordingMeta = {
+      projectId: currentProjectId(),
       hasMr: mixed.includesMr,
       hasMrTrack: Boolean(shouldUseMr && state.mrFile),
       mrName: shouldUseMr ? $("#mrFileName").textContent : "",
@@ -3187,6 +3254,7 @@ async function startRecording() {
     $("#recordingName").disabled = true;
     $("#recordingMemo").disabled = true;
     setRecordingBadge(countInSeconds ? "카운트인" : "시작 준비", "saving");
+    transportUpdate("녹음실", countInSeconds ? `${countInSeconds}초 카운트인` : "녹음 시작 준비", true, "recording");
 
     if (shouldUseMr && state.mrAudioBuffer) {
       scheduleMrBufferPlayback(startAt, 0);
@@ -3215,6 +3283,7 @@ async function startRecording() {
       $("#pauseRecording").disabled = false;
       $("#stopRecording").disabled = false;
       setRecordingBadge("녹음 중", "recording");
+      transportUpdate("녹음실", `${window.HoonProjects?.getCurrent?.()?.name || "프로젝트"} · 녹음 중`, true, "recording");
       const includesMrText = state.currentRecordingMeta?.hasMrTrack ? "MR과 보컬을 분리 트랙으로 녹음 중입니다." : "보컬 트랙을 녹음 중입니다.";
       $("#recordingStateText").textContent = includesMrText;
       $("#recordingMessage").textContent = state.currentRecordingMeta?.hasMr
@@ -3259,6 +3328,7 @@ function toggleRecordingPause() {
     $("#pauseRecording").textContent = "계속 녹음";
     $("#recordingStateText").textContent = "녹음과 MR을 같은 위치에서 잠시 멈췄습니다.";
     setRecordingBadge("일시정지", "paused");
+    transportUpdate("녹음실", "녹음과 MR 일시정지", false, "idle");
     updateRecordingTimer();
   } else if (recorder.state === "paused") {
     const resumeAt = context.currentTime + RECORDING_RESUME_LEAD_MS / 1000;
@@ -3278,6 +3348,7 @@ function toggleRecordingPause() {
     $("#pauseRecording").textContent = "일시정지";
     $("#recordingStateText").textContent = "MR 위치를 복원해 녹음을 계속하고 있습니다.";
     setRecordingBadge("녹음 중", "recording");
+    transportUpdate("녹음실", "녹음 계속", true, "recording");
   }
 }
 
@@ -3327,6 +3398,7 @@ function stopRecording({ skipTail = false } = {}) {
     ? "싱크 보정의 마지막 소리까지 담고 있습니다."
     : "녹음을 마무리하고 있습니다.";
   setRecordingBadge("저장 중", "saving");
+  transportUpdate("녹음실", "트랙 저장 중", true, "recording");
 
   const finalizeStop = () => {
     state.recordingStopTimeout = null;
@@ -3359,34 +3431,249 @@ function stopRecording({ skipTail = false } = {}) {
 }
 
 async function deleteAllRecordings() {
-  if (!state.recordings.length || !confirm(`저장된 녹음 ${state.recordings.length}개를 모두 삭제할까요?`)) return;
+  const targets = visibleRecordings();
+  const project = window.HoonProjects?.getCurrent?.();
+  if (!targets.length || !confirm(`‘${project?.name || "현재 프로젝트"}’의 녹음 ${targets.length}개를 모두 삭제할까요?`)) return;
   try {
-    if (state.recordings.some((recording) => !recording.volatile)) await clearStoredRecordings();
-    state.recordings = [];
+    await Promise.all(targets.filter((recording) => !recording.volatile).map((recording) => deleteStoredRecording(recording.id)));
+    const ids = new Set(targets.map((recording) => recording.id));
+    state.recordings = state.recordings.filter((recording) => !ids.has(recording.id));
+    renderProjectUi();
     renderRecordings();
-    $("#recordingMessage").textContent = "저장된 녹음을 모두 삭제했습니다.";
+    $("#recordingMessage").textContent = "현재 프로젝트의 녹음을 모두 삭제했습니다.";
   } catch (error) {
     $("#recordingMessage").textContent = error.message;
   }
 }
 
-function setupTabs() {
-  $$(".tab").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      const target = tab.dataset.tab;
-      if (target !== "recording" && state.mediaRecorder && state.mediaRecorder.state !== "inactive") stopRecording();
-      stopMetronome();
-      stopProgression();
-      stopTuner();
-      stopVocalTune();
-      $$(".tab").forEach((item) => {
-        const active = item === tab;
-        item.classList.toggle("is-active", active);
-        item.setAttribute("aria-selected", String(active));
-      });
-      $$(".panel").forEach((panel) => panel.classList.toggle("is-active", panel.id === target));
-    });
+function updateProjectSummary() {
+  const project = window.HoonProjects?.getCurrent?.();
+  const count = visibleRecordings().length;
+  const summary = $("#projectSummary");
+  if (!project || !summary) return;
+  const memo = String(project.memo || "").trim();
+  summary.textContent = `${count}개 녹음${memo ? ` · ${memo}` : " · 녹음과 MR을 프로젝트별로 정리합니다."}`;
+  $("#deleteProject").disabled = project.id === window.HoonProjects?.DEFAULT_ID;
+}
+
+function renderProjectUi() {
+  const select = $("#projectSelect");
+  if (!select || !window.HoonProjects) return;
+  const projects = window.HoonProjects.list().sort((a, b) => Number(b.lastUsedAt || b.updatedAt) - Number(a.lastUsedAt || a.updatedAt));
+  const currentId = currentProjectId();
+  select.innerHTML = "";
+  projects.forEach((project) => {
+    const option = document.createElement("option");
+    option.value = project.id;
+    option.textContent = project.name;
+    option.selected = project.id === currentId;
+    select.appendChild(option);
   });
+  updateProjectSummary();
+}
+
+function closeProjectDialog() {
+  const dialog = $("#projectDialog");
+  if (!dialog) return;
+  if (dialog.open && typeof dialog.close === "function") dialog.close();
+  else dialog.removeAttribute("open");
+}
+
+function openProjectDialog(mode = "create") {
+  const project = window.HoonProjects?.getCurrent?.();
+  state.projectDialogMode = mode;
+  $("#projectDialogTitle").textContent = mode === "edit" ? "프로젝트 정보 수정" : "새 녹음 프로젝트";
+  $("#projectNameInput").value = mode === "edit" ? project?.name || "" : "";
+  $("#projectMemoInput").value = mode === "edit" ? project?.memo || "" : "";
+  const dialog = $("#projectDialog");
+  if (typeof dialog.showModal === "function") dialog.showModal();
+  else dialog.setAttribute("open", "");
+  window.setTimeout(() => $("#projectNameInput").focus(), 0);
+}
+
+async function saveProjectFromDialog(event) {
+  event.preventDefault();
+  const name = $("#projectNameInput").value.trim();
+  const memo = $("#projectMemoInput").value.trim();
+  if (!name) {
+    $("#projectNameInput").focus();
+    return;
+  }
+  if (state.projectDialogMode === "edit") {
+    window.HoonProjects?.update?.(currentProjectId(), { name, memo });
+  } else {
+    window.HoonProjects?.create?.({ name, memo });
+  }
+  closeProjectDialog();
+  renderProjectUi();
+  renderRecordings();
+  transportUpdate("녹음실", `${window.HoonProjects?.getCurrent?.()?.name || "프로젝트"} 선택됨`, false, "idle");
+}
+
+async function deleteCurrentProject() {
+  const project = window.HoonProjects?.getCurrent?.();
+  if (!project || project.id === window.HoonProjects?.DEFAULT_ID) return;
+  const targets = state.recordings.filter((recording) => normalizedProjectId(recording) === project.id);
+  const message = targets.length
+    ? `‘${project.name}’을 삭제할까요? 녹음 ${targets.length}개는 기본 녹음 프로젝트로 이동합니다.`
+    : `‘${project.name}’ 프로젝트를 삭제할까요?`;
+  if (!confirm(message)) return;
+  const defaultId = window.HoonProjects.DEFAULT_ID;
+  const updates = [];
+  state.recordings = state.recordings.map((recording) => {
+    if (normalizedProjectId(recording) !== project.id) return recording;
+    const updated = { ...recording, projectId: defaultId, updatedAt: Date.now() };
+    if (!recording.volatile) updates.push(updated);
+    return updated;
+  });
+  if (updates.length) await Promise.allSettled(updates.map((recording) => putStoredRecording(recording)));
+  window.HoonProjects.remove(project.id);
+  renderProjectUi();
+  renderRecordings();
+  $("#recordingMessage").textContent = "프로젝트를 삭제하고 녹음은 기본 프로젝트로 이동했습니다.";
+}
+
+function setupProjects() {
+  renderProjectUi();
+  $("#projectSelect").addEventListener("change", (event) => {
+    window.HoonProjects?.setCurrentId?.(event.target.value);
+    renderProjectUi();
+    renderRecordings();
+    transportUpdate("녹음실", `${window.HoonProjects?.getCurrent?.()?.name || "프로젝트"} 선택됨`, false, "idle");
+  });
+  $("#newProject").addEventListener("click", () => openProjectDialog("create"));
+  $("#editProject").addEventListener("click", () => openProjectDialog("edit"));
+  $("#deleteProject").addEventListener("click", deleteCurrentProject);
+  $("#closeProjectDialog").addEventListener("click", closeProjectDialog);
+  $("#cancelProjectDialog").addEventListener("click", closeProjectDialog);
+  $("#projectForm").addEventListener("submit", saveProjectFromDialog);
+  $("#projectDialog").addEventListener("click", (event) => {
+    if (event.target === $("#projectDialog")) closeProjectDialog();
+  });
+}
+
+function setupSidebar() {
+  const button = $("#sidebarToggle");
+  if (!button) return;
+  const collapsed = localStorage.getItem("hoonMusicSidebarCollapsed") === "true";
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+  const update = () => {
+    const isCollapsed = document.body.classList.contains("sidebar-collapsed");
+    button.setAttribute("aria-expanded", String(!isCollapsed));
+    button.setAttribute("aria-label", isCollapsed ? "사이드바 펼치기" : "사이드바 접기");
+    button.querySelector("b").textContent = isCollapsed ? "메뉴 펼치기" : "메뉴 접기";
+  };
+  update();
+  button.addEventListener("click", () => {
+    document.body.classList.toggle("sidebar-collapsed");
+    localStorage.setItem("hoonMusicSidebarCollapsed", String(document.body.classList.contains("sidebar-collapsed")));
+    update();
+  });
+}
+
+function activateTab(target, { stopAudio = true } = {}) {
+  const tab = $(`.tab[data-tab="${target}"]`);
+  if (!tab) return;
+  if (target !== "recording" && state.mediaRecorder && state.mediaRecorder.state !== "inactive") stopRecording();
+  if (stopAudio) {
+    if (target !== "metronome") stopMetronome();
+    if (target !== "chords") stopProgression();
+    if (target !== "tuner") stopTuner();
+    if (target !== "vocalTune") stopVocalTune();
+    if (target !== "recording") {
+      $("#mrAudio")?.pause();
+      pauseOtherRecordingPlayers(null);
+    }
+  }
+  state.currentTab = target;
+  $$(".tab").forEach((item) => {
+    const active = item === tab;
+    item.classList.toggle("is-active", active);
+    item.setAttribute("aria-selected", String(active));
+  });
+  $$(".panel").forEach((panel) => panel.classList.toggle("is-active", panel.id === target));
+  const status = target === "recording"
+    ? `${window.HoonProjects?.getCurrent?.()?.name || "기본 프로젝트"} · 준비`
+    : "준비됨";
+  transportUpdate(TAB_LABELS[target] || "훈뮤직툴", status, false, "idle");
+}
+
+function setupTabs() {
+  $$(".tab").forEach((tab) => tab.addEventListener("click", () => activateTab(tab.dataset.tab)));
+}
+
+function stopAllAudio() {
+  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") stopRecording();
+  stopMetronome();
+  stopProgression();
+  stopTuner();
+  stopVocalTune();
+  stopMrBufferPlayback({ preservePosition: false });
+  const mrAudio = $("#mrAudio");
+  if (mrAudio) mrAudio.pause();
+  pauseOtherRecordingPlayers(null);
+  transportUpdate(TAB_LABELS[state.currentTab] || "훈뮤직툴", "모든 재생 정지", false, "idle");
+}
+
+async function transportPlayPause() {
+  if (state.currentTab === "chords") {
+    state.progressionPlaying ? stopProgression() : playProgression();
+    return;
+  }
+  if (state.currentTab === "metronome") {
+    toggleMetronome();
+    return;
+  }
+  if (state.currentTab === "tuner") {
+    toggleTuner();
+    return;
+  }
+  if (state.currentTab === "vocalTune") {
+    toggleVocalTune();
+    return;
+  }
+  const recorder = state.mediaRecorder;
+  if (recorder && recorder.state !== "inactive") {
+    toggleRecordingPause();
+    return;
+  }
+  if (state.activeRecordingAudio) {
+    try {
+      if (state.activeRecordingAudio.paused) await state.activeRecordingAudio.play();
+      else state.activeRecordingAudio.pause();
+    } catch (error) {
+      transportUpdate("녹음실", error.message, false, "error");
+    }
+    return;
+  }
+  const mrAudio = $("#mrAudio");
+  if (mrAudio?.src) {
+    try {
+      if (mrAudio.paused) await mrAudio.play();
+      else mrAudio.pause();
+      transportUpdate("MR 미리듣기", mrAudio.paused ? "일시정지" : "재생 중", !mrAudio.paused, "playing");
+    } catch (error) {
+      transportUpdate("MR 미리듣기", error.message, false, "error");
+    }
+    return;
+  }
+  transportUpdate("녹음실", "재생할 녹음 또는 MR을 선택하세요.", false, "idle");
+}
+
+function transportRecord() {
+  activateTab("recording");
+  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") stopRecording();
+  else startRecording();
+}
+
+function setupTransport() {
+  window.HoonTransport?.configure({
+    playPause: transportPlayPause,
+    stop: stopAllAudio,
+    record: transportRecord
+  });
+  window.HoonTransport?.init();
+  transportUpdate("코드 진행", "준비됨", false, "idle");
 }
 
 function isStandaloneMode() {
@@ -3641,6 +3928,17 @@ function bindEvents() {
   });
   $("#mrAudio").addEventListener("play", () => {
     try { ensureMrAudioGraph(); } catch (error) { $("#mrMessage").textContent = error.message; }
+    if (!state.mediaRecorder || state.mediaRecorder.state === "inactive") {
+      stopMetronome();
+      stopProgression();
+      stopTuner();
+      stopVocalTune();
+      pauseOtherRecordingPlayers(null);
+      transportUpdate("MR 미리듣기", state.mrFile?.name || "MR 재생 중", true, "playing");
+    }
+  });
+  $("#mrAudio").addEventListener("pause", () => {
+    if (!state.mediaRecorder || state.mediaRecorder.state === "inactive") transportUpdate("MR 미리듣기", "일시정지", false, "idle");
   });
   $("#mrAudio").addEventListener("ended", () => {
     if (!state.mediaRecorder || state.mediaRecorder.state === "inactive") $("#mrMessage").textContent = "MR 미리듣기가 끝났습니다.";
@@ -3712,6 +4010,9 @@ function bindEvents() {
 
 loadSettings();
 setupTabs();
+setupProjects();
+setupSidebar();
+setupTransport();
 renderBeatIndicators();
 renderTuningTargets();
 renderVocalScaleNotes();

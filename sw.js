@@ -1,9 +1,11 @@
-const CACHE_NAME = "hoon-music-tool-v1.8-responsive";
+const CACHE_NAME = "hoon-music-tool-v1.8.1-stable";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./core/projects.js",
+  "./core/transport.js",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/icon-512.png"
