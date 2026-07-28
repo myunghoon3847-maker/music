@@ -2,7 +2,7 @@
   "id": "./",
   "name": "훈뮤직툴 Studio - 음악 작업실",
   "short_name": "훈뮤직툴",
-  "description": "PC 작업실 UI, 프로젝트별 녹음 관리, 공통 재생 제어, 코드 진행, 보컬튠, 보컬·MR 분리 녹음, 메트로놈, 튜너 도구",
+  "description": "PC 작업실 UI, 프로젝트별 녹음 관리, 보컬·MR 앱 내 2트랙 재생과 기본 믹서, 코드 진행, 보컬튠, 메트로놈, 튜너 도구",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

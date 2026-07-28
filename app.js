@@ -374,6 +374,7 @@ const TAB_LABELS = {
   chords: "코드 진행",
   vocalTune: "보컬튠",
   recording: "녹음실",
+  mixer: "2트랙 믹서",
   metronome: "메트로놈",
   tuner: "튜너"
 };
@@ -1700,6 +1701,7 @@ async function startVocalTune() {
 
     stopMetronome();
     stopProgression();
+    window.HoonMixer?.stop?.({ preservePosition: false, silent: true });
     stopTuner(false);
     setVocalBadge("권한 확인 중", "listening");
     $("#vocalMessage").textContent = "마이크 사용 권한을 확인하고 있습니다.";
@@ -2587,6 +2589,7 @@ function createRecordingPlayer(recording, objectUrl) {
       stopTuner();
       stopVocalTune();
       $("#mrAudio")?.pause();
+      window.HoonMixer?.stop?.({ preservePosition: true, silent: true });
       pauseOtherRecordingPlayers(audio);
       if (audio.ended || Number(audio.currentTime) >= expectedDuration - 0.05) {
         try { audio.currentTime = 0; } catch {}
@@ -2671,6 +2674,7 @@ function renderRecordings() {
     empty.className = "recording-empty";
     empty.innerHTML = "<strong>이 프로젝트에 저장된 녹음이 없습니다.</strong><span>녹음을 시작하면 현재 프로젝트에 자동으로 정리됩니다.</span>";
     list.appendChild(empty);
+    window.HoonMixer?.refresh?.();
     return;
   }
 
@@ -2773,6 +2777,18 @@ function renderRecordings() {
 
     const actions = document.createElement("div");
     actions.className = "recording-item-actions";
+
+    let openMixerButton = null;
+    if (recording.vocalBlob || recording.mrBlob) {
+      openMixerButton = document.createElement("button");
+      openMixerButton.type = "button";
+      openMixerButton.className = "recording-small-btn is-mixer";
+      openMixerButton.textContent = "믹서로 열기";
+      openMixerButton.addEventListener("click", async () => {
+        activateTab("mixer");
+        await window.HoonMixer?.selectRecording?.(recording.id);
+      });
+    }
 
     const editButton = document.createElement("button");
     editButton.type = "button";
@@ -2882,12 +2898,14 @@ function renderRecordings() {
       }
     });
 
+    if (openMixerButton) actions.append(openMixerButton);
     actions.append(editButton, downloadButton, deleteButton);
     item.append(header, memo, player);
     if (trackPanel) item.appendChild(trackPanel);
     item.append(actions, editor);
     list.appendChild(item);
   });
+  window.HoonMixer?.refresh?.();
 }
 
 async function loadRecordings() {
@@ -3539,6 +3557,7 @@ function setupProjects() {
     window.HoonProjects?.setCurrentId?.(event.target.value);
     renderProjectUi();
     renderRecordings();
+    window.HoonMixer?.refresh?.();
     transportUpdate("녹음실", `${window.HoonProjects?.getCurrent?.()?.name || "프로젝트"} 선택됨`, false, "idle");
   });
   $("#newProject").addEventListener("click", () => openProjectDialog("create"));
@@ -3549,6 +3568,36 @@ function setupProjects() {
   $("#projectForm").addEventListener("submit", saveProjectFromDialog);
   $("#projectDialog").addEventListener("click", (event) => {
     if (event.target === $("#projectDialog")) closeProjectDialog();
+  });
+}
+
+async function saveMixerSettings(recording, mixSettings) {
+  const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+  const updated = { ...latest, mixSettings, updatedAt: Date.now() };
+  if (!recording.volatile) await putStoredRecording(updated);
+  state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+  return updated;
+}
+
+function stopAudioForMixer() {
+  stopMetronome();
+  stopProgression();
+  stopTuner();
+  stopVocalTune();
+  stopMrBufferPlayback({ preservePosition: false });
+  const mrAudio = $("#mrAudio");
+  if (mrAudio) mrAudio.pause();
+  pauseOtherRecordingPlayers(null);
+}
+
+function setupMixer() {
+  window.HoonMixer?.init?.({
+    getRecordings: () => visibleRecordings(),
+    getAudioContext: ensureAudioContext,
+    saveSettings: saveMixerSettings,
+    stopOtherAudio: stopAudioForMixer,
+    transportUpdate,
+    onStatus: () => {}
   });
 }
 
@@ -3584,6 +3633,7 @@ function activateTab(target, { stopAudio = true } = {}) {
       $("#mrAudio")?.pause();
       pauseOtherRecordingPlayers(null);
     }
+    if (target !== "mixer") window.HoonMixer?.stop?.({ preservePosition: true, silent: true });
   }
   state.currentTab = target;
   $$(".tab").forEach((item) => {
@@ -3594,7 +3644,9 @@ function activateTab(target, { stopAudio = true } = {}) {
   $$(".panel").forEach((panel) => panel.classList.toggle("is-active", panel.id === target));
   const status = target === "recording"
     ? `${window.HoonProjects?.getCurrent?.()?.name || "기본 프로젝트"} · 준비`
-    : "준비됨";
+    : target === "mixer"
+      ? "2트랙 녹음을 선택하세요"
+      : "준비됨";
   transportUpdate(TAB_LABELS[target] || "훈뮤직툴", status, false, "idle");
 }
 
@@ -3608,6 +3660,7 @@ function stopAllAudio() {
   stopProgression();
   stopTuner();
   stopVocalTune();
+  window.HoonMixer?.stop?.();
   stopMrBufferPlayback({ preservePosition: false });
   const mrAudio = $("#mrAudio");
   if (mrAudio) mrAudio.pause();
@@ -3630,6 +3683,10 @@ async function transportPlayPause() {
   }
   if (state.currentTab === "vocalTune") {
     toggleVocalTune();
+    return;
+  }
+  if (state.currentTab === "mixer") {
+    window.HoonMixer?.toggle?.();
     return;
   }
   const recorder = state.mediaRecorder;
@@ -3934,6 +3991,7 @@ function bindEvents() {
       stopTuner();
       stopVocalTune();
       pauseOtherRecordingPlayers(null);
+      window.HoonMixer?.stop?.({ preservePosition: true, silent: true });
       transportUpdate("MR 미리듣기", state.mrFile?.name || "MR 재생 중", true, "playing");
     }
   });
@@ -4003,6 +4061,7 @@ function bindEvents() {
     revokeRecordingObjectUrls();
     stopMetronome();
     stopProgression();
+    window.HoonMixer?.stop?.({ preservePosition: false, silent: true });
     stopTuner(false);
     stopVocalTune(false);
   });
@@ -4013,6 +4072,7 @@ setupTabs();
 setupProjects();
 setupSidebar();
 setupTransport();
+setupMixer();
 renderBeatIndicators();
 renderTuningTargets();
 renderVocalScaleNotes();

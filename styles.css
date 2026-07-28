@@ -2634,3 +2634,209 @@ input, select, textarea { font-size: 16px; }
   .project-dialog { width: min(94vw, 480px); border-radius: 18px; }
   .project-dialog form { padding: 18px 16px; }
 }
+
+/* =========================================================
+   v1.9 TWO TRACK MIXER
+   ========================================================= */
+.tabs { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.tab[data-tab="mixer"]::before { content: "≋"; font-weight: 900; }
+.recording-small-btn.is-mixer { color: #fff; background: var(--accent); }
+
+.mixer-card { overflow: hidden; }
+.mixer-heading { margin-bottom: 14px; }
+.mixer-status-badge {
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: .7rem;
+  font-weight: 900;
+}
+.mixer-status-badge[data-mode="playing"] { color: #fff; background: var(--accent); }
+.mixer-status-badge[data-mode="loading"] { color: #8b5b16; background: #fff1d2; }
+.mixer-status-badge[data-mode="error"] { color: #a83232; background: #ffe4e4; }
+
+.mixer-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.mixer-recording-field { min-width: 0; }
+.mixer-recording-field select { width: 100%; min-height: 44px; }
+.mixer-toolbar .secondary-btn { min-height: 44px; border-radius: 12px; }
+
+.mixer-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8f8fc;
+}
+.mixer-meta > div { min-width: 0; }
+.mixer-meta strong { display: block; overflow: hidden; font-size: .9rem; text-overflow: ellipsis; white-space: nowrap; }
+.mixer-meta p { margin: 4px 0 0; overflow: hidden; color: var(--muted); font-size: .68rem; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.mixer-master-control span { display: flex; justify-content: space-between; margin-bottom: 0; }
+.mixer-legacy-notice {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: #8a4d20;
+  background: #fff3df;
+  font-size: .7rem;
+  line-height: 1.5;
+}
+
+.mixer-timeline {
+  position: relative;
+  display: grid;
+  gap: 7px;
+  margin: 14px 0 10px;
+  padding: 12px 12px 14px;
+  border: 1px solid #dfe1ec;
+  border-radius: 14px;
+  background: #242638;
+  overflow: hidden;
+}
+.mixer-timeline-ruler {
+  display: flex;
+  justify-content: space-between;
+  padding-left: 64px;
+  color: #aeb0c3;
+  font-size: .58rem;
+}
+.mixer-lane { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: center; gap: 8px; }
+.mixer-lane > b { color: #c8cadb; font-size: .6rem; letter-spacing: .06em; }
+.mixer-lane-track {
+  position: relative;
+  height: 38px;
+  border-radius: 8px;
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,.045) 0 1px, transparent 1px 12.5%);
+  overflow: hidden;
+}
+.mixer-clip {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  min-width: 12px;
+  padding: 0 9px;
+  border-radius: 6px;
+  overflow: hidden;
+  color: #fff;
+  font-size: .58rem;
+  font-weight: 900;
+  letter-spacing: .05em;
+  white-space: nowrap;
+}
+.mixer-clip.is-mr { background: linear-gradient(135deg, #5968d9, #4653bc); }
+.mixer-clip.is-vocal { background: linear-gradient(135deg, #cf5b8f, #ad3d73); }
+.mixer-playhead {
+  position: absolute;
+  z-index: 4;
+  top: 27px;
+  bottom: 8px;
+  left: calc(76px + (100% - 88px) * var(--mixer-progress, 0));
+  width: 2px;
+  background: #ffca5c;
+  box-shadow: 0 0 0 1px rgba(255,202,92,.15), 0 0 12px rgba(255,202,92,.55);
+  pointer-events: none;
+}
+
+.mixer-transport {
+  display: grid;
+  grid-template-columns: minmax(110px, .8fr) minmax(80px, .55fr) minmax(260px, 3fr);
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.mixer-transport .primary-btn,
+.mixer-transport .secondary-btn { min-height: 46px; border-radius: 12px; }
+.mixer-seek-wrap { min-width: 0; padding: 5px 11px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.mixer-seek-wrap > div { display: flex; justify-content: flex-end; gap: 4px; color: var(--muted); font-size: .62rem; font-variant-numeric: tabular-nums; }
+
+.mixer-track-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.mixer-track-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  transition: opacity .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.mixer-track-card.is-mr { border-top: 3px solid #5968d9; }
+.mixer-track-card.is-vocal { border-top: 3px solid #c64f86; }
+.mixer-track-card.is-muted { opacity: .58; }
+.mixer-track-card.is-solo { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.mixer-track-card.is-unavailable { opacity: .45; }
+.mixer-track-card > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.mixer-track-card > header > div:first-child { display: grid; gap: 2px; }
+.mixer-track-card > header strong { font-size: .9rem; }
+.mixer-track-kicker { color: var(--muted); font-size: .55rem; font-weight: 900; letter-spacing: .09em; }
+.mixer-track-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.mixer-mini-btn {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  background: #f8f8fc;
+  cursor: pointer;
+  font: inherit;
+  font-size: .6rem;
+  font-weight: 900;
+}
+.mixer-mini-btn.is-active { color: #fff; border-color: var(--accent); background: var(--accent); }
+.mixer-control-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mixer-control-grid label > span,
+.mixer-offset-control label > span { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: .68rem; }
+.mixer-control-grid output,
+.mixer-offset-control output { color: var(--text); font-variant-numeric: tabular-nums; }
+.mixer-offset-control { display: grid; grid-template-columns: minmax(0, 1fr) 86px; align-items: end; gap: 8px; margin-top: 10px; }
+.mixer-offset-number { min-height: 40px !important; padding: 0 8px !important; border-radius: 10px !important; text-align: center; font-size: .72rem; }
+.mixer-advanced { margin-top: 10px; border-top: 1px solid var(--line); }
+.mixer-advanced summary { display: flex; justify-content: space-between; padding-top: 10px; cursor: pointer; color: var(--muted); font-size: .65rem; font-weight: 900; }
+.mixer-advanced .mixer-control-grid { margin-top: 8px; }
+.mixer-message { margin-bottom: 0; }
+
+@media (min-width: 900px) {
+  #mixer .mixer-card { min-height: calc(100vh - 132px); padding: 18px; }
+  #mixer .mixer-track-grid { grid-template-columns: minmax(300px, 1fr) minmax(300px, 1fr); }
+  #mixer .mixer-timeline { min-height: 150px; }
+  .recording-item:has(.recording-small-btn.is-mixer) .recording-item-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 899px) {
+  .tabs { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .mixer-card { padding-inline: 12px; }
+  .mixer-meta { grid-template-columns: 1fr; gap: 8px; }
+  .mixer-meta p { white-space: normal; }
+  .mixer-timeline { padding-inline: 9px; }
+  .mixer-timeline-ruler { padding-left: 52px; }
+  .mixer-lane { grid-template-columns: 45px minmax(0, 1fr); gap: 6px; }
+  .mixer-playhead { left: calc(61px + (100% - 70px) * var(--mixer-progress, 0)); }
+  .mixer-transport { grid-template-columns: 1fr .7fr; }
+  .mixer-seek-wrap { grid-column: 1 / -1; }
+  .mixer-track-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 430px) {
+  .tab { font-size: .55rem; }
+  .tab::before { width: 23px; height: 23px; }
+  .mixer-toolbar { grid-template-columns: 1fr; }
+  .mixer-toolbar .secondary-btn { min-height: 40px; }
+  .mixer-track-card > header { align-items: flex-start; }
+  .mixer-track-actions { max-width: 190px; }
+  .mixer-control-grid { gap: 7px; }
+}
+
+@media (max-width: 899px) {
+  .recording-item:has(.recording-small-btn.is-mixer) .recording-item-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
