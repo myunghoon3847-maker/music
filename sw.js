@@ -1,4 +1,4 @@
-const CACHE_NAME = "hoon-music-tool-v1.9-two-track-mixer";
+const CACHE_NAME = "hoon-music-tool-v1.9.1-mix-export-overdub";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,7 +6,9 @@ const APP_SHELL = [
   "./app.js",
   "./core/projects.js",
   "./core/transport.js",
+  "./core/mix-renderer.js",
   "./core/mixer.js",
+  "./core/wav-encoder.worker.js",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/icon-512.png"

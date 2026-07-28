@@ -374,7 +374,7 @@ const TAB_LABELS = {
   chords: "코드 진행",
   vocalTune: "보컬튠",
   recording: "녹음실",
-  mixer: "2트랙 믹서",
+  mixer: "멀티트랙 믹서",
   metronome: "메트로놈",
   tuner: "튜너"
 };
@@ -2691,10 +2691,12 @@ function renderRecordings() {
     const title = document.createElement("strong");
     title.textContent = recording.name || "보컬 녹음";
     titleLine.appendChild(title);
-    if (recording.hasSeparatedTracks) {
+    const storedTrackCount = [recording.vocalBlob, recording.mrBlob].filter((blob) => blob instanceof Blob).length
+      + (Array.isArray(recording.extraTracks) ? recording.extraTracks.filter((track) => track?.blob instanceof Blob).length : 0);
+    if (storedTrackCount > 0) {
       const tag = document.createElement("span");
       tag.className = "recording-mr-tag is-tracks";
-      tag.textContent = "2트랙";
+      tag.textContent = `${storedTrackCount}트랙`;
       titleLine.appendChild(tag);
     } else if (recording.hasMr) {
       const tag = document.createElement("span");
@@ -2705,7 +2707,9 @@ function renderRecordings() {
     const meta = document.createElement("span");
     const created = new Date(recording.createdAt);
     const syncText = recording.hasMr && Number(recording.syncOffsetMs) ? ` · 싱크 ${formatSignedMilliseconds(recording.syncOffsetMs)}` : "";
-    const totalTrackSize = (recording.blob?.size || 0) + (recording.vocalBlob?.size || 0) + (recording.mrBlob?.size || 0);
+    const extraTrackSize = (Array.isArray(recording.extraTracks) ? recording.extraTracks : [])
+      .reduce((total, track) => total + (track?.blob?.size || 0), 0);
+    const totalTrackSize = (recording.blob?.size || 0) + (recording.vocalBlob?.size || 0) + (recording.mrBlob?.size || 0) + extraTrackSize;
     meta.textContent = `${created.toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })} · ${formatRecordingDuration(recording.durationMs)} · ${formatFileSize(totalTrackSize || recording.blob?.size || 0)}${syncText}`;
     titleWrap.append(titleLine, meta);
     header.appendChild(titleWrap);
@@ -2721,11 +2725,12 @@ function renderRecordings() {
     const player = createRecordingPlayer(recording, objectUrl);
 
     let trackPanel = null;
-    if (recording.vocalBlob || recording.mrBlob) {
+    if (recording.vocalBlob || recording.mrBlob || (Array.isArray(recording.extraTracks) && recording.extraTracks.some((track) => track?.blob instanceof Blob))) {
       trackPanel = document.createElement("details");
       trackPanel.className = "recording-track-panel";
       const summary = document.createElement("summary");
-      const trackCount = [recording.vocalBlob, recording.mrBlob].filter(Boolean).length;
+      const trackCount = [recording.vocalBlob, recording.mrBlob].filter((blob) => blob instanceof Blob).length
+        + (Array.isArray(recording.extraTracks) ? recording.extraTracks.filter((track) => track?.blob instanceof Blob).length : 0);
       summary.textContent = `분리 트랙 ${trackCount}개`;
       trackPanel.appendChild(summary);
 
@@ -2762,6 +2767,9 @@ function renderRecordings() {
 
       addTrackRow("보컬 트랙", "마이크 원본", recording.vocalBlob, recording.vocalMimeType, `${recording.name}-보컬`);
       addTrackRow("MR 트랙", recording.mrName || "원본 반주", recording.mrBlob, recording.mrMimeType, `${recording.name}-MR`);
+      (Array.isArray(recording.extraTracks) ? recording.extraTracks : []).forEach((track, index) => {
+        addTrackRow(track.name || `추가 트랙 ${index + 1}`, "믹서에서 추가 녹음", track.blob, track.mimeType, `${recording.name}-${track.name || `추가트랙-${index + 1}`}`);
+      });
 
       const timeline = document.createElement("p");
       timeline.className = "recording-track-timeline";
@@ -2779,7 +2787,7 @@ function renderRecordings() {
     actions.className = "recording-item-actions";
 
     let openMixerButton = null;
-    if (recording.vocalBlob || recording.mrBlob) {
+    if (recording.vocalBlob || recording.mrBlob || (Array.isArray(recording.extraTracks) && recording.extraTracks.some((track) => track?.blob instanceof Blob))) {
       openMixerButton = document.createElement("button");
       openMixerButton.type = "button";
       openMixerButton.className = "recording-small-btn is-mixer";
@@ -3071,6 +3079,7 @@ async function finishRecording(blob, durationMs, mimeType, vocalTrackResult = nu
     vocalMimeType: vocalTrackResult?.mimeType || vocalBlob?.type || "audio/webm",
     vocalBlob,
     mrBlob,
+    extraTracks: [],
     blob
   };
   try {
@@ -3579,6 +3588,45 @@ async function saveMixerSettings(recording, mixSettings) {
   return updated;
 }
 
+async function addMixerExtraTrack(recording, track) {
+  const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+  const extraTracks = [...(Array.isArray(latest.extraTracks) ? latest.extraTracks : []), track];
+  const updated = {
+    ...latest,
+    extraTracks,
+    trackVersion: Math.max(3, Number(latest.trackVersion) || 0),
+    updatedAt: Date.now()
+  };
+  if (!recording.volatile) await putStoredRecording(updated);
+  state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+  window.HoonProjects?.touch?.(updated.projectId);
+  renderProjectUi();
+  renderRecordings();
+  return updated;
+}
+
+async function removeMixerExtraTrack(recording, trackId) {
+  const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+  const extraTracks = (Array.isArray(latest.extraTracks) ? latest.extraTracks : []).filter((track) => String(track.id) !== String(trackId));
+  const updated = { ...latest, extraTracks, updatedAt: Date.now() };
+  if (!recording.volatile) await putStoredRecording(updated);
+  state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+  renderRecordings();
+  return updated;
+}
+
+async function recordMixerExport(recording, exportInfo) {
+  try {
+    const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+    const history = [...(Array.isArray(latest.exportHistory) ? latest.exportHistory : []), exportInfo].slice(-10);
+    const updated = { ...latest, exportHistory: history, lastExport: exportInfo, updatedAt: Date.now() };
+    if (!recording.volatile) await putStoredRecording(updated);
+    state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+  } catch (error) {
+    console.warn("믹스 내보내기 기록 저장 실패", error);
+  }
+}
+
 function stopAudioForMixer() {
   stopMetronome();
   stopProgression();
@@ -3595,6 +3643,9 @@ function setupMixer() {
     getRecordings: () => visibleRecordings(),
     getAudioContext: ensureAudioContext,
     saveSettings: saveMixerSettings,
+    addExtraTrack: addMixerExtraTrack,
+    removeExtraTrack: removeMixerExtraTrack,
+    recordExport: recordMixerExport,
     stopOtherAudio: stopAudioForMixer,
     transportUpdate,
     onStatus: () => {}
@@ -4048,7 +4099,9 @@ function bindEvents() {
   });
 
   window.addEventListener("beforeunload", (event) => {
-    if (!state.mediaRecorder || state.mediaRecorder.state === "inactive") return;
+    const mainRecording = state.mediaRecorder && state.mediaRecorder.state !== "inactive";
+    const mixerRecording = Boolean(window.HoonMixer?.isRecording?.());
+    if (!mainRecording && !mixerRecording) return;
     event.preventDefault();
     event.returnValue = "";
   });

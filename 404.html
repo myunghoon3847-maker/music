@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="훈뮤직툴" />
   <meta name="format-detection" content="telephone=no" />
-  <meta name="description" content="코드 진행·보컬 음정 연습·보컬과 MR 분리 녹음·앱 내 2트랙 믹서·메트로놈·튜너를 제공하는 개인용 음악 제작 도구" />
+  <meta name="description" content="코드 진행·보컬 음정 연습·보컬과 MR 분리 녹음·앱 내 멀티트랙 믹서·WAV 내보내기·메트로놈·튜너를 제공하는 개인용 음악 제작 도구" />
   <title>훈뮤직툴 · Studio</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
@@ -442,10 +442,13 @@
         <div class="card mixer-card">
           <div class="section-heading mixer-heading">
             <div>
-              <p class="section-kicker">TWO TRACK MIXER</p>
+              <p class="section-kicker">MULTI TRACK MIXER</p>
               <h2 id="mixer-title">보컬·MR 믹서</h2>
             </div>
-            <span id="mixerStatusBadge" class="mixer-status-badge" data-mode="idle">준비</span>
+            <div class="mixer-heading-status">
+              <span id="mixerSaveState" class="mixer-save-state" data-state="saved">저장됨</span>
+              <span id="mixerStatusBadge" class="mixer-status-badge" data-mode="idle">준비</span>
+            </div>
           </div>
 
           <div class="mixer-toolbar">
@@ -455,31 +458,38 @@
                 <option value="">녹음을 선택하세요</option>
               </select>
             </label>
-            <button id="mixerReset" class="secondary-btn mixer-control" type="button" disabled>믹서 초기화</button>
+            <div class="mixer-toolbar-actions">
+              <button id="mixerReset" class="secondary-btn mixer-control" type="button" disabled>전체 초기화</button>
+            </div>
           </div>
 
           <div class="mixer-meta">
             <div>
               <strong id="mixerRecordingTitle">녹음을 선택해 주세요</strong>
-              <p id="mixerRecordingMemo">저장된 보컬·MR 트랙을 앱 안에서 바로 재생하고 조절합니다.</p>
+              <p id="mixerRecordingMemo">저장된 트랙을 앱 안에서 바로 재생하고 조절합니다.</p>
             </div>
-            <label class="mixer-master-control">
-              <span>마스터 <output id="mixerMasterVolumeValue">90%</output></span>
-              <input id="mixerMasterVolume" class="range compact mixer-control" type="range" min="0" max="150" value="90" disabled />
-            </label>
+            <div class="mixer-master-wrap">
+              <label class="mixer-master-control">
+                <span>마스터 <output id="mixerMasterVolumeValue">90%</output></span>
+                <input id="mixerMasterVolume" class="range compact mixer-control" type="range" min="0" max="150" value="90" disabled />
+              </label>
+              <input id="mixerMasterVolumeNumber" class="mixer-small-number mixer-control" type="number" min="0" max="150" step="1" value="90" disabled aria-label="마스터 음량 직접 입력" />
+            </div>
           </div>
           <p id="mixerLegacyNotice" class="mixer-legacy-notice" hidden></p>
 
-          <div class="mixer-timeline" aria-label="보컬과 MR 트랙 타임라인">
+          <div class="mixer-timeline" aria-label="믹서 트랙 타임라인">
             <div class="mixer-timeline-ruler"><span>0:00</span><span>중간</span><span>끝</span></div>
             <div class="mixer-lane"><b>MR</b><div class="mixer-lane-track"><span id="mixerMrClip" class="mixer-clip is-mr" hidden>MR</span></div></div>
             <div class="mixer-lane"><b>VOCAL</b><div class="mixer-lane-track"><span id="mixerVocalClip" class="mixer-clip is-vocal" hidden>VOCAL</span></div></div>
+            <div id="mixerExtraLanes" class="mixer-extra-lanes"></div>
             <div id="mixerPlayhead" class="mixer-playhead" aria-hidden="true"></div>
           </div>
 
           <div class="mixer-transport">
             <button id="mixerPlay" class="primary-btn" type="button" disabled>전체 재생</button>
             <button id="mixerStop" class="secondary-btn" type="button" disabled>정지</button>
+            <button id="mixerCompare" class="secondary-btn mixer-control" type="button" disabled>원본 비교</button>
             <div class="mixer-seek-wrap">
               <input id="mixerSeek" class="range mixer-control" type="range" min="0" max="1" step="0.01" value="0" disabled aria-label="믹서 재생 위치" />
               <div><span id="mixerCurrentTime">00:00</span><span>/</span><span id="mixerDuration">00:00</span></div>
@@ -491,14 +501,15 @@
               <header>
                 <div><span class="mixer-track-kicker">BACKING TRACK</span><strong>MR 트랙</strong></div>
                 <div class="mixer-track-actions">
-                  <button id="mixerMrPlayOnly" class="mixer-mini-btn mixer-control" type="button" disabled>MR만 듣기</button>
+                  <button id="mixerMrPlayOnly" class="mixer-mini-btn mixer-control" type="button" disabled>MR만</button>
                   <button id="mixerMrMute" class="mixer-mini-btn mixer-control" type="button" disabled>음소거</button>
                   <button id="mixerMrSolo" class="mixer-mini-btn mixer-control" type="button" disabled>솔로</button>
+                  <button id="mixerMrReset" class="mixer-mini-btn mixer-control" type="button" disabled>초기화</button>
                 </div>
               </header>
               <div class="mixer-control-grid">
-                <label><span>음량 <output id="mixerMrVolumeValue">80%</output></span><input id="mixerMrVolume" class="range compact mixer-control" type="range" min="0" max="150" value="80" disabled /></label>
-                <label><span>팬 <output id="mixerMrPanValue">C</output></span><input id="mixerMrPan" class="range compact mixer-control" type="range" min="-100" max="100" value="0" disabled /></label>
+                <div class="mixer-value-control"><label><span>음량 <output id="mixerMrVolumeValue">80%</output></span><input id="mixerMrVolume" class="range compact mixer-control" type="range" min="0" max="150" value="80" disabled /></label><input id="mixerMrVolumeNumber" class="mixer-small-number mixer-control" type="number" min="0" max="150" step="1" value="80" disabled aria-label="MR 음량 직접 입력" /></div>
+                <div class="mixer-value-control"><label><span>팬 <output id="mixerMrPanValue">C</output></span><input id="mixerMrPan" class="range compact mixer-control" type="range" min="-100" max="100" value="0" disabled /></label><input id="mixerMrPanNumber" class="mixer-small-number mixer-control" type="number" min="-100" max="100" step="1" value="0" disabled aria-label="MR 팬 직접 입력" /></div>
               </div>
               <div class="mixer-offset-control">
                 <label><span>트랙 위치 <output id="mixerMrOffsetValue">0ms</output></span><input id="mixerMrOffset" class="range compact mixer-control" type="range" min="-1000" max="1000" step="10" value="0" disabled /></label>
@@ -517,14 +528,15 @@
               <header>
                 <div><span class="mixer-track-kicker">VOCAL TRACK</span><strong>보컬 트랙</strong></div>
                 <div class="mixer-track-actions">
-                  <button id="mixerVocalPlayOnly" class="mixer-mini-btn mixer-control" type="button" disabled>보컬만 듣기</button>
+                  <button id="mixerVocalPlayOnly" class="mixer-mini-btn mixer-control" type="button" disabled>보컬만</button>
                   <button id="mixerVocalMute" class="mixer-mini-btn mixer-control" type="button" disabled>음소거</button>
                   <button id="mixerVocalSolo" class="mixer-mini-btn mixer-control" type="button" disabled>솔로</button>
+                  <button id="mixerVocalReset" class="mixer-mini-btn mixer-control" type="button" disabled>초기화</button>
                 </div>
               </header>
               <div class="mixer-control-grid">
-                <label><span>음량 <output id="mixerVocalVolumeValue">100%</output></span><input id="mixerVocalVolume" class="range compact mixer-control" type="range" min="0" max="150" value="100" disabled /></label>
-                <label><span>팬 <output id="mixerVocalPanValue">C</output></span><input id="mixerVocalPan" class="range compact mixer-control" type="range" min="-100" max="100" value="0" disabled /></label>
+                <div class="mixer-value-control"><label><span>음량 <output id="mixerVocalVolumeValue">100%</output></span><input id="mixerVocalVolume" class="range compact mixer-control" type="range" min="0" max="150" value="100" disabled /></label><input id="mixerVocalVolumeNumber" class="mixer-small-number mixer-control" type="number" min="0" max="150" step="1" value="100" disabled aria-label="보컬 음량 직접 입력" /></div>
+                <div class="mixer-value-control"><label><span>팬 <output id="mixerVocalPanValue">C</output></span><input id="mixerVocalPan" class="range compact mixer-control" type="range" min="-100" max="100" value="0" disabled /></label><input id="mixerVocalPanNumber" class="mixer-small-number mixer-control" type="number" min="-100" max="100" step="1" value="0" disabled aria-label="보컬 팬 직접 입력" /></div>
               </div>
               <div class="mixer-offset-control">
                 <label><span>트랙 위치 <output id="mixerVocalOffsetValue">0ms</output></span><input id="mixerVocalOffset" class="range compact mixer-control" type="range" min="-1000" max="1000" step="10" value="0" disabled /></label>
@@ -540,11 +552,44 @@
             </article>
           </div>
 
-          <p id="mixerStatus" class="helper mixer-message">2트랙 녹음을 선택해 주세요.</p>
-          <p class="privacy-note">트랙은 브라우저 저장소에서 바로 불러오며 외부 서버로 전송하지 않습니다.</p>
+          <div id="mixerExtraTrackGrid" class="mixer-extra-track-grid" aria-live="polite"></div>
+
+          <section class="mixer-overdub-panel" aria-labelledby="mixer-overdub-title">
+            <div class="mixer-subheading">
+              <div><span class="mixer-track-kicker">OVERDUB RECORDING</span><strong id="mixer-overdub-title">빈 트랙 추가 녹음</strong></div>
+              <span id="mixerOverdubTimer" class="mixer-overdub-timer">00:00</span>
+            </div>
+            <div class="mixer-overdub-form">
+              <label><span>트랙 이름</span><input id="mixerOverdubName" type="text" maxlength="40" placeholder="예: 코러스 1, 더블링" /></label>
+              <label class="mixer-check"><input id="mixerOverdubCountIn" type="checkbox" checked /><span>3초 카운트인</span></label>
+              <button id="mixerOverdubStart" class="primary-btn" type="button" disabled>＋ 빈 트랙 녹음</button>
+              <button id="mixerOverdubStop" class="secondary-btn" type="button" disabled>정지·트랙 저장</button>
+            </div>
+            <div class="mixer-overdub-level" aria-label="추가 녹음 입력 레벨"><span id="mixerOverdubLevel"></span></div>
+            <p id="mixerOverdubStatus" class="helper">이어폰을 연결하고 현재 믹스를 들으며 새 보컬·악기 트랙을 녹음할 수 있습니다.</p>
+          </section>
+
+          <section class="mixer-export-panel" aria-labelledby="mixer-export-title">
+            <div class="mixer-subheading">
+              <div><span class="mixer-track-kicker">WAV EXPORT</span><strong id="mixer-export-title">믹스 내보내기</strong></div>
+              <span id="mixerOutputBadge" class="mixer-output-badge" data-state="idle">출력 대기</span>
+            </div>
+            <div class="mixer-export-grid">
+              <label><span>파일명</span><input id="mixerExportName" type="text" maxlength="80" placeholder="프로젝트명_최종믹스" disabled /></label>
+              <button id="mixerExportWav" class="primary-btn mixer-control" type="button" disabled>WAV 믹스 만들기</button>
+            </div>
+            <progress id="mixerExportProgress" class="mixer-export-progress" max="100" value="0" hidden></progress>
+            <p id="mixerExportStatus" class="helper">44.1kHz · 스테레오 · 16bit WAV로 생성합니다.</p>
+            <div id="mixerExportResult" class="mixer-export-result" hidden>
+              <audio id="mixerExportAudio" controls preload="metadata"></audio>
+              <button id="mixerExportDownload" class="secondary-btn" type="button">WAV 파일 저장</button>
+            </div>
+          </section>
+
+          <p id="mixerStatus" class="helper mixer-message">트랙이 있는 녹음을 선택해 주세요.</p>
+          <p class="privacy-note">트랙과 믹스 생성은 기기 안에서 처리되며 외부 서버로 전송하지 않습니다.</p>
         </div>
       </section>
-
 
       <section id="chords" class="panel is-active" aria-labelledby="chords-title">
         <div class="card chord-builder-card">
@@ -709,7 +754,7 @@
     </section>
 
     <footer>
-      <p>PC 작업실 · 프로젝트 기반 · 2트랙 믹서 · v1.9</p>
+      <p>PC 작업실 · 멀티트랙 녹음 · WAV 믹스 · v1.9.1</p>
     </footer>
   </div>
 
@@ -755,6 +800,7 @@
 
   <script src="core/projects.js" defer></script>
   <script src="core/transport.js" defer></script>
+  <script src="core/mix-renderer.js" defer></script>
   <script src="core/mixer.js" defer></script>
   <script src="app.js" defer></script>
 </body>
