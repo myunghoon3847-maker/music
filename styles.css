@@ -3150,3 +3150,110 @@ input, select, textarea { font-size: 16px; }
   .mixer-toolbar-actions #mixerReset { grid-column: 1 / -1; }
   .mixer-trim-grid { grid-template-columns: 1fr; }
 }
+
+/* =========================================================
+   v1.9.3 CLIP SPLIT · LOOP · PRECISION EDITING
+   ========================================================= */
+.mixer-clip-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 8px 11px;
+  border-bottom: 1px solid #dedfeb;
+  background: #fbfbfe;
+}
+.mixer-clip-toolbar .secondary-btn { min-height: 34px; padding: 0 11px; border-radius: 9px; font-size: .64rem; }
+.mixer-clip-toolbar .secondary-btn.is-danger { color: #ad3030; border-color: #efc6c6; background: #fff7f7; }
+.mixer-clip-toolbar .secondary-btn.is-active { color: #5b4211; border-color: #f0c35d; background: #fff2c9; }
+.mixer-clip-toolbar kbd { padding: 1px 4px; border: 1px solid rgba(0,0,0,.14); border-radius: 4px; background: rgba(255,255,255,.72); font: inherit; font-size: .55rem; }
+.mixer-tool-divider { width: 1px; height: 24px; margin-inline: 2px; background: #d9dbe6; }
+.mixer-clip-toolbar small { margin-left: auto; color: var(--muted); font-size: .6rem; font-weight: 800; }
+
+.mixer-loop-region {
+  position: absolute;
+  z-index: 1;
+  top: 29px;
+  bottom: 8px;
+  left: calc(76px + (100% - 88px) * var(--loop-start, 0));
+  width: calc((100% - 88px) * var(--loop-size, 0));
+  border-inline: 1px solid rgba(255,202,92,.8);
+  background: rgba(255,202,92,.1);
+  pointer-events: none;
+}
+.mixer-playhead span {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  padding: 3px 5px;
+  border-radius: 6px;
+  color: #332b18;
+  background: #ffca5c;
+  font-size: .52rem;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.mixer-clip small {
+  position: relative;
+  z-index: 2;
+  margin-left: auto;
+  padding-right: 7px;
+  color: rgba(255,255,255,.78);
+  font-size: .48rem;
+  font-weight: 800;
+  pointer-events: none;
+}
+.mixer-clip { touch-action: pan-y; }
+.mixer-clip.is-dragging { touch-action: none; }
+
+.mixer-clip-inspector {
+  padding: 10px 11px 12px;
+  border-top: 1px solid #dedfeb;
+  background: #fff;
+}
+.mixer-clip-inspector-title { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.mixer-clip-inspector-title strong { font-size: .72rem; }
+.mixer-clip-inspector-title span { overflow: hidden; color: var(--muted); font-size: .6rem; text-overflow: ellipsis; white-space: nowrap; }
+.mixer-clip-inspector-grid { display: grid; grid-template-columns: repeat(6, minmax(90px, 1fr)); gap: 7px; }
+.mixer-clip-inspector-grid label { display: grid; gap: 4px; color: var(--muted); font-size: .56rem; font-weight: 850; }
+.mixer-clip-inspector-grid input {
+  width: 100%;
+  min-height: 35px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--text);
+  background: #fff;
+  font: inherit;
+  font-size: .66rem;
+  font-weight: 850;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* v1.9.3부터 자르기·페이드는 선택 클립 인스펙터에서 편집합니다. */
+#mixer .mixer-track-card .mixer-advanced { display: none; }
+
+@media (max-width: 1100px) {
+  .mixer-clip-inspector-grid { grid-template-columns: repeat(3, minmax(100px, 1fr)); }
+}
+
+@media (max-width: 899px) {
+  .mixer-loop-region { left: calc(61px + (100% - 70px) * var(--loop-start, 0)); width: calc((100% - 70px) * var(--loop-size, 0)); }
+  .mixer-clip-toolbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mixer-clip-toolbar .secondary-btn { width: 100%; padding-inline: 5px; }
+  .mixer-tool-divider { display: none; }
+  .mixer-clip-toolbar small { grid-column: 1 / -1; margin-left: 0; text-align: center; }
+  .mixer-clip-inspector-title { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .mixer-clip-inspector-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mixer-trim-handle { width: 14px; }
+  .mixer-trim-handle::after { left: 6px; }
+  .mixer-clip small { display: none; }
+}
+
+@media (max-width: 520px) {
+  .mixer-clip-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mixer-clip-inspector-grid { grid-template-columns: 1fr 1fr; }
+}

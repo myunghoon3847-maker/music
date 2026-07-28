@@ -491,16 +491,37 @@
                 <label><span>스냅</span><select id="mixerSnap" class="mixer-control" disabled><option value="10" selected>10ms</option><option value="50">50ms</option><option value="100">100ms</option></select></label>
               </div>
             </div>
+            <div class="mixer-clip-toolbar" aria-label="클립 편집 도구">
+              <button id="mixerSplitClip" class="secondary-btn mixer-control" type="button" disabled>분할 <kbd>S</kbd></button>
+              <button id="mixerDeleteClip" class="secondary-btn is-danger mixer-control" type="button" disabled>클립 삭제</button>
+              <span class="mixer-tool-divider" aria-hidden="true"></span>
+              <button id="mixerLoopStart" class="secondary-btn mixer-control" type="button" disabled>반복 시작</button>
+              <button id="mixerLoopEnd" class="secondary-btn mixer-control" type="button" disabled>반복 끝</button>
+              <button id="mixerLoopToggle" class="secondary-btn mixer-control" type="button" disabled>구간 반복</button>
+              <small id="mixerLoopInfo">반복 구간 없음</small>
+            </div>
             <div id="mixerTimelineViewport" class="mixer-timeline" aria-label="믹서 트랙 타임라인">
               <div id="mixerTimelineContent" class="mixer-timeline-content">
                 <div class="mixer-timeline-ruler"><span id="mixerRulerStart">0:00</span><span id="mixerRulerMiddle">0:00</span><span id="mixerRulerEnd">0:00</span></div>
-                <div class="mixer-lane"><b>MR</b><div class="mixer-lane-track" data-lane="mr"><span id="mixerMrClip" class="mixer-clip is-mr" data-track-clip="mr" tabindex="0" hidden><canvas aria-hidden="true"></canvas><em>MR</em><i class="mixer-trim-handle is-start" data-trim-edge="start"></i><i class="mixer-trim-handle is-end" data-trim-edge="end"></i></span></div></div>
-                <div class="mixer-lane"><b>VOCAL</b><div class="mixer-lane-track" data-lane="vocal"><span id="mixerVocalClip" class="mixer-clip is-vocal" data-track-clip="vocal" tabindex="0" hidden><canvas aria-hidden="true"></canvas><em>VOCAL</em><i class="mixer-trim-handle is-start" data-trim-edge="start"></i><i class="mixer-trim-handle is-end" data-trim-edge="end"></i></span></div></div>
+                <div class="mixer-lane"><b>MR</b><div class="mixer-lane-track" data-lane="mr"></div></div>
+                <div class="mixer-lane"><b>VOCAL</b><div class="mixer-lane-track" data-lane="vocal"></div></div>
                 <div id="mixerExtraLanes" class="mixer-extra-lanes"></div>
-                <div id="mixerPlayhead" class="mixer-playhead" aria-hidden="true"></div>
+                <div id="mixerLoopRegion" class="mixer-loop-region" hidden aria-hidden="true"></div>
+                <div id="mixerPlayhead" class="mixer-playhead" aria-hidden="true"><span id="mixerPlayheadTime">00:00</span></div>
               </div>
             </div>
-            <p class="mixer-timeline-help">클립을 좌우로 끌면 싱크가 바뀌고, 양쪽 손잡이를 끌면 시작·끝을 비파괴 방식으로 자릅니다.</p>
+            <p class="mixer-timeline-help">클립을 좌우로 이동하고, 손잡이로 자르며, 재생선 위치에서 분할할 수 있습니다. 모바일에서는 클립을 길게 누르거나 가로로 밀어 이동합니다.</p>
+            <div class="mixer-clip-inspector" aria-label="선택한 클립 설정">
+              <div class="mixer-clip-inspector-title"><strong>선택한 클립</strong><span id="mixerClipInfo">타임라인에서 클립을 선택해 주세요.</span></div>
+              <div class="mixer-clip-inspector-grid">
+                <label><span>클립 위치(ms)</span><input id="mixerClipPosition" class="mixer-control" type="number" step="10" value="0" disabled /></label>
+                <label><span>원본 시작(s)</span><input id="mixerClipSourceStart" class="mixer-control" type="number" min="0" step="0.01" value="0" disabled /></label>
+                <label><span>원본 끝(s)</span><input id="mixerClipSourceEnd" class="mixer-control" type="number" min="0.05" step="0.01" value="0" disabled /></label>
+                <label><span>클립 음량(%)</span><input id="mixerClipVolume" class="mixer-control" type="number" min="0" max="150" step="1" value="100" disabled /></label>
+                <label><span>페이드인(s)</span><input id="mixerClipFadeIn" class="mixer-control" type="number" min="0" max="10" step="0.01" value="0" disabled /></label>
+                <label><span>페이드아웃(s)</span><input id="mixerClipFadeOut" class="mixer-control" type="number" min="0" max="10" step="0.01" value="0" disabled /></label>
+              </div>
+            </div>
           </section>
 
           <div class="mixer-transport">
@@ -779,7 +800,7 @@
     </section>
 
     <footer>
-      <p>PC 작업실 · 파형 타임라인 · 비파괴 편집 · v1.9.2</p>
+      <p>PC 작업실 · 클립 분할 · 구간 반복 · v1.9.3</p>
     </footer>
   </div>
 

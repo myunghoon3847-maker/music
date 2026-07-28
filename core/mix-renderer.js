@@ -10,13 +10,13 @@
   }
 
   function anySolo(tracks, settings) {
-    return tracks.some((track) => Boolean(settings[track.key]?.solo));
+    return Object.values(settings || {}).some((value) => Boolean(value && typeof value === "object" && value.solo));
   }
 
   function effectiveGain(track, settings, soloActive) {
-    const value = settings[track.key] || {};
+    const value = settings[track.settingsKey || track.key] || {};
     if (value.muted || (soloActive && !value.solo)) return 0;
-    return clamp(value.volume ?? 1, 0, 1.5);
+    return clamp(value.volume ?? 1, 0, 1.5) * clamp(track.clipVolume ?? 1, 0, 1.5);
   }
 
   function scheduleFade(param, when, duration, fadeIn, fadeOut) {
@@ -93,7 +93,7 @@
 
     const soloActive = anySolo(tracks, settings);
     tracks.forEach((track) => {
-      const trackSettings = settings[track.key] || {};
+      const trackSettings = settings[track.settingsKey || track.key] || {};
       const trimStart = clamp(track.trimStartSec || 0, 0, track.buffer.duration);
       const trimEnd = clamp(track.trimEndSec || 0, 0, Math.max(0, track.buffer.duration - trimStart));
       const playableDuration = Number.isFinite(track.playableDuration) ? clamp(track.playableDuration, 0, track.buffer.duration - trimStart) : Math.max(0, track.buffer.duration - trimStart - trimEnd);
@@ -110,7 +110,7 @@
       trackGain.connect(panner);
       panner.connect(master);
       const when = Math.max(0, track.startSec);
-      scheduleFade(fadeGain.gain, when, playableDuration, trackSettings.fadeIn || 0, trackSettings.fadeOut || 0);
+      scheduleFade(fadeGain.gain, when, playableDuration, track.clipFadeIn ?? trackSettings.fadeIn ?? 0, track.clipFadeOut ?? trackSettings.fadeOut ?? 0);
       source.start(when, trimStart, playableDuration);
     });
 
