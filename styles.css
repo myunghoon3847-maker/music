@@ -3367,3 +3367,188 @@ input, select, textarea { font-size: 16px; }
   .mixer-record-action-buttons { grid-template-columns: 1fr; }
   .mixer-track-action-card { padding: 11px; }
 }
+
+/* =========================================================
+   v1.9.4.1 COMPACT TRACK TOOLBAR + UI FIX
+   ========================================================= */
+.mixer-track-quickbar {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 12px;
+  padding: 8px 10px;
+  border: 1px solid #dfe1eb;
+  border-radius: 12px;
+  background: #f8f8fc;
+}
+.mixer-add-track-btn {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #cfd1e1;
+  border-radius: 10px;
+  color: #4f50d7;
+  background: #fff;
+  box-shadow: none;
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.mixer-add-track-btn:hover:not(:disabled) {
+  border-color: #8587ea;
+  background: #f0f0ff;
+}
+.mixer-add-track-btn:disabled { opacity: .42; cursor: not-allowed; }
+.mixer-track-quick-status {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.mixer-track-quick-status strong {
+  overflow: hidden;
+  color: #252639;
+  font-size: .73rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mixer-track-quick-status span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: .59rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mixer-track-quick-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+.mixer-record-compact,
+.mixer-stop-compact,
+.mixer-options-btn {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: .64rem;
+  font-weight: 850;
+}
+.mixer-record-compact {
+  border: 1px solid #5759df;
+  color: #fff;
+  background: #5759df;
+}
+.mixer-stop-compact,
+.mixer-options-btn {
+  border: 1px solid #d7d9e6;
+  color: #4c4d62;
+  background: #fff;
+}
+.mixer-record-compact:disabled,
+.mixer-stop-compact:disabled { opacity: .42; cursor: not-allowed; }
+.mixer-options-btn[aria-expanded="true"] {
+  color: #4f50d7;
+  border-color: #b9baef;
+  background: #efefff;
+}
+.mixer-track-quickbar .mixer-overdub-timer {
+  min-width: 48px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: .62rem;
+}
+.mixer-record-options {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) auto auto minmax(90px, 1fr);
+  align-items: end;
+  gap: 8px;
+  margin: -4px 0 12px;
+  padding: 10px;
+  border: 1px solid #e1e2ec;
+  border-radius: 11px;
+  background: #fff;
+}
+.mixer-record-options[hidden] { display: none; }
+.mixer-record-options > label:not(.mixer-check) {
+  display: grid;
+  grid-template-columns: auto minmax(80px, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+.mixer-record-options > label > span {
+  color: var(--muted);
+  font-size: .61rem;
+  font-weight: 850;
+}
+.mixer-record-options > label > em {
+  color: var(--muted);
+  font-size: .6rem;
+  font-style: normal;
+}
+.mixer-record-options input[type="number"] {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+}
+.mixer-record-options .secondary-btn { min-height: 34px; padding: 0 10px; font-size: .62rem; }
+.mixer-record-options .mixer-check {
+  min-height: 34px;
+  margin: 0;
+  padding: 0 9px;
+  border: 1px solid #e1e2ec;
+  border-radius: 9px;
+  background: #fafafd;
+}
+.mixer-record-options .mixer-overdub-level {
+  margin: 0;
+  align-self: center;
+}
+
+/* Keep the transport and track creation controls visually connected. */
+.mixer-transport { margin-bottom: 0; }
+
+@media (max-width: 899px) {
+  .mixer-track-quickbar {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+  .mixer-track-quick-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    padding-left: 48px;
+  }
+  .mixer-record-options {
+    grid-template-columns: minmax(150px, 1fr) auto auto;
+  }
+  .mixer-record-options .mixer-overdub-level { grid-column: 1 / -1; }
+}
+
+@media (max-width: 560px) {
+  .mixer-track-quickbar {
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px;
+  }
+  .mixer-add-track-btn { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
+  .mixer-track-quick-actions {
+    padding-left: 42px;
+    gap: 5px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .mixer-track-quick-actions::-webkit-scrollbar { display: none; }
+  .mixer-record-compact,
+  .mixer-stop-compact,
+  .mixer-options-btn { flex: 0 0 auto; min-height: 31px; padding: 0 9px; }
+  .mixer-track-quick-status span { white-space: normal; }
+  .mixer-record-options { grid-template-columns: 1fr; align-items: stretch; }
+  .mixer-record-options > label:not(.mixer-check) { grid-template-columns: auto 1fr auto; }
+  .mixer-record-options .mixer-overdub-level { grid-column: auto; }
+}

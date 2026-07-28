@@ -14,7 +14,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=1941" />
 </head>
 <body>
   <div class="app-shell">
@@ -534,6 +534,26 @@
             </div>
           </div>
 
+          <div class="mixer-track-quickbar" aria-label="트랙 추가 및 녹음">
+            <button id="mixerAddTrack" class="mixer-add-track-btn" type="button" disabled aria-label="빈 트랙 추가" title="빈 트랙 추가">+</button>
+            <div class="mixer-track-quick-status">
+              <strong id="mixerRecordTarget">추가 트랙 없음</strong>
+              <span id="mixerOverdubStatus">+ 버튼으로 빈 트랙을 추가하세요.</span>
+            </div>
+            <div class="mixer-track-quick-actions">
+              <button id="mixerTrackRecordStart" class="mixer-record-compact" type="button" disabled>● 녹음</button>
+              <button id="mixerTrackRecordStop" class="mixer-stop-compact" type="button" disabled>■ 저장</button>
+              <button id="mixerRecordOptionsToggle" class="mixer-options-btn" type="button" aria-expanded="false" aria-controls="mixerRecordOptions">설정</button>
+              <span id="mixerOverdubTimer" class="mixer-overdub-timer">00:00</span>
+            </div>
+          </div>
+          <div id="mixerRecordOptions" class="mixer-record-options" hidden>
+            <label><span>녹음 시작 위치</span><input id="mixerRecordStartPosition" type="number" min="0" step="0.01" value="0" disabled /><em>초</em></label>
+            <button id="mixerRecordUsePlayhead" class="secondary-btn" type="button" disabled>현재 재생선</button>
+            <label class="mixer-check"><input id="mixerOverdubCountIn" type="checkbox" checked disabled /><span>3초 카운트인</span></label>
+            <div class="mixer-overdub-level" aria-label="추가 녹음 입력 레벨"><span id="mixerOverdubLevel"></span></div>
+          </div>
+
           <div class="mixer-track-grid">
             <article id="mixerMrRow" class="mixer-track-card is-mr is-unavailable">
               <header>
@@ -599,34 +619,6 @@
           </div>
 
           <div id="mixerExtraTrackGrid" class="mixer-extra-track-grid" aria-live="polite"></div>
-
-          <section class="mixer-overdub-panel" aria-labelledby="mixer-overdub-title">
-            <div class="mixer-subheading">
-              <div><span class="mixer-track-kicker">TRACK & RECORDING</span><strong id="mixer-overdub-title">트랙 추가·구간 녹음</strong></div>
-              <span id="mixerOverdubTimer" class="mixer-overdub-timer">00:00</span>
-            </div>
-            <div class="mixer-track-action-grid">
-              <div class="mixer-track-action-card">
-                <div class="mixer-track-action-heading"><span>1</span><div><strong>빈 트랙 추가</strong><small>녹음 없이 트랙만 먼저 만듭니다.</small></div></div>
-                <label><span>새 트랙 이름</span><input id="mixerNewTrackName" type="text" maxlength="40" placeholder="예: 코러스 1, 더블링" /></label>
-                <button id="mixerAddTrack" class="secondary-btn" type="button" disabled>＋ 트랙 추가</button>
-              </div>
-              <div class="mixer-track-action-card is-recording-action">
-                <div class="mixer-track-action-heading"><span>2</span><div><strong>선택 트랙에 녹음</strong><small id="mixerRecordTarget">추가 트랙을 선택해 주세요.</small></div></div>
-                <div class="mixer-record-start-grid">
-                  <label><span>녹음 시작 위치(초)</span><input id="mixerRecordStartPosition" type="number" min="0" step="0.01" value="0" disabled /></label>
-                  <button id="mixerRecordUsePlayhead" class="secondary-btn" type="button" disabled>현재 재생선 사용</button>
-                </div>
-                <label class="mixer-check"><input id="mixerOverdubCountIn" type="checkbox" checked disabled /><span>3초 카운트인</span></label>
-                <div class="mixer-record-action-buttons">
-                  <button id="mixerTrackRecordStart" class="primary-btn" type="button" disabled>● 선택 트랙 녹음</button>
-                  <button id="mixerTrackRecordStop" class="secondary-btn" type="button" disabled>정지·저장</button>
-                </div>
-              </div>
-            </div>
-            <div class="mixer-overdub-level" aria-label="추가 녹음 입력 레벨"><span id="mixerOverdubLevel"></span></div>
-            <p id="mixerOverdubStatus" class="helper">빈 트랙을 만든 뒤 타임라인에서 시작 위치를 정하고 선택 트랙에 녹음합니다. 이어폰 사용을 권장합니다.</p>
-          </section>
 
           <section class="mixer-export-panel" aria-labelledby="mixer-export-title">
             <div class="mixer-subheading">
@@ -813,7 +805,7 @@
     </section>
 
     <footer>
-      <p>PC 작업실 · 트랙 추가 · 원하는 구간 녹음 · v1.9.4</p>
+      <p>PC 작업실 · 간편 트랙 추가 · 구간 녹음 · v1.9.4.1</p>
     </footer>
   </div>
 
@@ -857,13 +849,13 @@
     </section>
   </div>
 
-  <script src="core/projects.js" defer></script>
-  <script src="core/transport.js" defer></script>
-  <script src="core/timeline.js" defer></script>
-  <script src="core/edit-history.js" defer></script>
-  <script src="core/waveform.js" defer></script>
-  <script src="core/mix-renderer.js" defer></script>
-  <script src="core/mixer.js" defer></script>
-  <script src="app.js" defer></script>
+  <script src="core/projects.js?v=1941" defer></script>
+  <script src="core/transport.js?v=1941" defer></script>
+  <script src="core/timeline.js?v=1941" defer></script>
+  <script src="core/edit-history.js?v=1941" defer></script>
+  <script src="core/waveform.js?v=1941" defer></script>
+  <script src="core/mix-renderer.js?v=1941" defer></script>
+  <script src="core/mixer.js?v=1941" defer></script>
+  <script src="app.js?v=1941" defer></script>
 </body>
 </html>

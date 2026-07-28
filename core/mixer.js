@@ -11,7 +11,7 @@
     sources: {}, nodes: { master: null, limiter: null, original: null, trackNodes: {} }, settings: clone(DEFAULT_SETTINGS),
     context: null, loadingToken: 0, playing: false, compareOriginal: false, startAt: 0, startPosition: 0,
     position: 0, duration: 0, mixDuration: 0, frameId: null, endTimer: null, saveTimer: null,
-    restartTimer: null, seeking: false, initialized: false, exportUrl: "", exportBlob: null, exporting: false,
+    restartTimer: null, seeking: false, initialized: false, exportUrl: "", exportBlob: null, exporting: false, addingTrack: false,
     timeline: { zoom: 1, snapMs: 10, selectedTrackKey: "", selectedClipId: "", drag: null, loopEnabled: false, loopStartSec: 0, loopEndSec: 0, lastAutoScrollAt: 0 },
     history: window.HoonEditHistory?.create?.(60) || null, historyCoalesce: { key: "", at: 0 },
     overdub: {
@@ -689,8 +689,8 @@
     ["mixerReset", "mixerMasterVolume", "mixerMasterVolumeNumber", "mixerSeek", "mixerPlay", "mixerStop", "mixerExportName", "mixerExportWav", "mixerZoom", "mixerSnap", "mixerLoopStart", "mixerLoopEnd", "mixerLoopToggle"].forEach((id) => { const el = $(id); if (el) el.disabled = !hasAny || state.overdub.active || state.exporting; });
     if ($("mixerCompare")) $("mixerCompare").disabled = !state.originalBuffer || state.overdub.active || state.exporting;
     const extraCount = state.trackDefs.filter((def) => !def.base).length;
-    if ($("mixerAddTrack")) $("mixerAddTrack").disabled = !state.recording || state.overdub.active || state.exporting || extraCount >= OVERDUB_MAX_TRACKS;
-    if ($("mixerNewTrackName")) $("mixerNewTrackName").disabled = !state.recording || state.overdub.active || state.exporting || extraCount >= OVERDUB_MAX_TRACKS;
+    if ($("mixerAddTrack")) $("mixerAddTrack").disabled = !state.recording || state.overdub.active || state.exporting || state.addingTrack || extraCount >= OVERDUB_MAX_TRACKS;
+    if ($("mixerRecordOptionsToggle")) $("mixerRecordOptionsToggle").disabled = !state.recording || state.overdub.active || state.exporting;
     const canRecordTarget = Boolean(hasAny && selectedExtra && selectedExtra.data?.id);
     if ($("mixerTrackRecordStart")) $("mixerTrackRecordStart").disabled = !canRecordTarget || state.overdub.active || state.exporting;
     if ($("mixerTrackRecordStop")) $("mixerTrackRecordStop").disabled = !state.overdub.active;
@@ -1271,14 +1271,29 @@
     setStatus(`녹음 시작 위치를 ${formatTime(currentPosition())}로 설정했습니다.`, "idle");
   }
 
+  function attachEmptyTrack(updated, track) {
+    const def = buildTrackDefs(updated).find((entry) => entry.key === getTrackKey(track));
+    if (!def) throw new Error("생성된 트랙을 화면에 연결하지 못했습니다.");
+    state.recording = updated;
+    state.selectedId = String(updated.id);
+    if (!state.trackDefs.some((entry) => entry.key === def.key)) state.trackDefs.push(def);
+    else state.trackDefs = state.trackDefs.map((entry) => entry.key === def.key ? def : entry);
+    state.buffers[def.key] = null;
+    if (!state.settings[def.key]) state.settings[def.key] = { ...defaultTrackSettings(def, updated), clips: [] };
+    renderExtraStructure();
+    calculateDuration();
+    renderControls();
+    updateMeta();
+    selectTrack(def.key, { scroll: false });
+  }
+
   async function addEmptyTrack() {
-    if (!state.recording || state.overdub.active || state.exporting) return;
+    if (!state.recording || state.overdub.active || state.exporting || state.addingTrack) return;
     const extraCount = state.trackDefs.filter((def) => !def.base).length;
     if (extraCount >= OVERDUB_MAX_TRACKS) { setStatus(`추가 트랙은 현재 ${OVERDUB_MAX_TRACKS}개까지 지원합니다.`, "error"); return; }
-    const input = $("mixerNewTrackName");
-    const name = String(input?.value || "").trim().slice(0, 40) || `추가 트랙 ${extraCount + 1}`;
+    const name = `트랙 ${extraCount + 1}`;
     const track = {
-      id: crypto.randomUUID?.() || `track-${Date.now()}`,
+      id: globalThis.crypto?.randomUUID?.() || `track-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name,
       blob: null,
       empty: true,
@@ -1287,18 +1302,35 @@
       trimStartMs: 0,
       offsetMs: 0
     };
+    state.addingTrack = true;
+    updateAvailability();
+    if ($("mixerOverdubStatus")) $("mixerOverdubStatus").textContent = "빈 트랙을 추가하는 중입니다…";
     try {
-      const updated = await state.callbacks.createEmptyTrack?.(state.recording, track);
-      if (input) input.value = "";
-      if (updated) {
-        await loadRecording(updated);
-        selectTrack(getTrackKey(track), { scroll: true });
+      if (typeof state.callbacks.createEmptyTrack !== "function") throw new Error("트랙 저장 기능이 연결되지 않았습니다.");
+      const updated = await state.callbacks.createEmptyTrack(state.recording, track);
+      if (!updated || !(Array.isArray(updated.extraTracks) && updated.extraTracks.some((entry) => String(entry.id) === String(track.id)))) {
+        throw new Error("트랙 저장 결과를 확인하지 못했습니다.");
       }
-      setStatus(`‘${name}’ 빈 트랙을 추가했습니다. 시작 위치를 정한 뒤 녹음하세요.`, "idle");
-      if ($("mixerOverdubStatus")) $("mixerOverdubStatus").textContent = `‘${name}’ 트랙이 준비되었습니다. 타임라인 재생선을 옮기거나 시작 시간을 입력하세요.`;
+      attachEmptyTrack(updated, track);
+      setStatus(`‘${name}’ 빈 트랙을 추가했습니다.`, "idle");
+      if ($("mixerOverdubStatus")) $("mixerOverdubStatus").textContent = "새 트랙이 선택되었습니다. 재생선을 옮긴 뒤 녹음을 누르세요.";
     } catch (error) {
       setStatus(`빈 트랙을 추가하지 못했습니다: ${error.message}`, "error");
+      if ($("mixerOverdubStatus")) $("mixerOverdubStatus").textContent = `트랙 추가 실패 · ${error.message}`;
+    } finally {
+      state.addingTrack = false;
+      updateAvailability();
     }
+  }
+
+  function toggleRecordOptions() {
+    const panel = $("mixerRecordOptions");
+    const button = $("mixerRecordOptionsToggle");
+    if (!panel || !button) return;
+    const willOpen = panel.hidden;
+    panel.hidden = !willOpen;
+    button.setAttribute("aria-expanded", String(willOpen));
+    button.textContent = willOpen ? "설정 닫기" : "설정";
   }
 
   function preferredMimeType() {
@@ -1458,7 +1490,7 @@
     ["change", "pointerup", "pointercancel"].forEach((eventName) => seek?.addEventListener(eventName, () => { const wasPlaying = state.playing; const next = clamp(seek.value, 0, state.duration); state.seeking = false; state.position = next; if (wasPlaying && !state.overdub.active) play(next); else updateTimeUi(); }));
     $("mixerExportWav")?.addEventListener("click", exportWav); $("mixerExportDownload")?.addEventListener("click", downloadExport);
     $("mixerAddTrack")?.addEventListener("click", addEmptyTrack);
-    $("mixerNewTrackName")?.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); addEmptyTrack(); } });
+    $("mixerRecordOptionsToggle")?.addEventListener("click", toggleRecordOptions);
     $("mixerRecordUsePlayhead")?.addEventListener("click", useCurrentPlayheadForRecording);
     $("mixerTrackRecordStart")?.addEventListener("click", startOverdub); $("mixerTrackRecordStop")?.addEventListener("click", finishOverdub);
     document.addEventListener("keydown", (event) => {
