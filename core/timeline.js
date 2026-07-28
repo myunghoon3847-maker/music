@@ -25,6 +25,7 @@
       volume: clamp(clip.volume ?? fallback.volume ?? 1, 0, 1.5),
       fadeIn: clamp(clip.fadeIn ?? fallback.fadeIn ?? 0, 0, Math.min(10, clipDuration / 2)),
       fadeOut: clamp(clip.fadeOut ?? fallback.fadeOut ?? 0, 0, Math.min(10, clipDuration / 2)),
+      muted: Boolean(clip.muted ?? fallback.muted ?? false),
       name: String(clip.name || fallback.name || "").slice(0, 60)
     };
   }

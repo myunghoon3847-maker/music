@@ -16,7 +16,11 @@
     const transport = get("studioTransport");
     if (sourceEl) sourceEl.textContent = source;
     if (statusEl) statusEl.textContent = status;
-    if (playButton) playButton.textContent = active ? "일시정지" : "재생";
+    if (playButton) {
+      playButton.textContent = active ? "⏸" : "▶";
+      playButton.setAttribute("aria-label", active ? "일시정지" : "재생");
+      playButton.title = `${active ? "일시정지" : "재생"} · Space`;
+    }
     if (transport) {
       transport.dataset.mode = mode;
       transport.classList.toggle("is-active", active);

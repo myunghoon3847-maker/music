@@ -12,7 +12,7 @@
     context: null, loadingToken: 0, playing: false, compareOriginal: false, startAt: 0, startPosition: 0,
     position: 0, duration: 0, mixDuration: 0, frameId: null, endTimer: null, saveTimer: null,
     restartTimer: null, seeking: false, initialized: false, exportUrl: "", exportBlob: null, exporting: false, addingTrack: false,
-    timeline: { zoom: 1, snapMs: 10, selectedTrackKey: "", selectedClipId: "", drag: null, loopEnabled: false, loopStartSec: 0, loopEndSec: 0, lastAutoScrollAt: 0 },
+    timeline: { zoom: 1, snapMs: 10, selectedTrackKey: "", selectedClipId: "", drag: null, loopEnabled: false, loopStartSec: 0, loopEndSec: 0, lastAutoScrollAt: 0, resize: null },
     history: window.HoonEditHistory?.create?.(60) || null, historyCoalesce: { key: "", at: 0 },
     overdub: {
       active: false, recorder: null, stream: null, chunks: [], source: null, gate: null, destination: null,
@@ -278,8 +278,59 @@
 
   function clipElementHtml(def, clipWindow, index) {
     const selected = state.timeline.selectedClipId === clipWindow.clipId;
+    const muted = Boolean(clipWindow.muted);
     const label = clipWindow.name || `${def.name} ${index + 1}`;
-    return `<span class="mixer-clip is-${def.kind} ${selected ? "is-selected" : ""}" data-track-clip="${escapeHtml(def.key)}" data-clip-id="${escapeHtml(clipWindow.clipId)}" tabindex="0"><canvas aria-hidden="true"></canvas><em>${escapeHtml(label)}</em><small>${formatTime(clipWindow.duration)}</small><i class="mixer-trim-handle is-start" data-trim-edge="start"></i><i class="mixer-trim-handle is-end" data-trim-edge="end"></i></span>`;
+    return `<span class="mixer-clip is-${def.kind} ${selected ? "is-selected" : ""} ${muted ? "is-muted" : ""}" data-track-clip="${escapeHtml(def.key)}" data-clip-id="${escapeHtml(clipWindow.clipId)}" tabindex="0"><canvas aria-hidden="true"></canvas><em>${escapeHtml(label)}</em><small>${formatTime(clipWindow.duration)}</small><button class="mixer-clip-mute" data-clip-action="mute" type="button" aria-label="${muted ? "클립 음소거 해제" : "클립 음소거"}" title="${muted ? "클립 음소거 해제" : "클립 음소거"}">${muted ? "🔇" : "M"}</button><i class="mixer-trim-handle is-start" data-trim-edge="start"></i><i class="mixer-trim-handle is-end" data-trim-edge="end"></i></span>`;
+  }
+
+  function timelineHeaderHtml(def) {
+    const key = escapeHtml(def.key);
+    const isExtra = !def.base;
+    const shortName = def.key === "mr" ? "MR" : def.key === "vocal" ? "VOCAL" : escapeHtml(def.name);
+    return `<div class="mixer-lane" data-track-row="${key}">
+      <div class="mixer-lane-header" data-track-header="${key}" data-track-select="${key}">
+        <button class="mixer-lane-name" data-timeline-action="select" data-track-key="${key}" type="button" title="${escapeHtml(def.name)} 선택">${shortName}</button>
+        <div class="mixer-lane-actions">
+          <button data-timeline-action="mute" data-track-key="${key}" type="button" aria-label="${escapeHtml(def.name)} 음소거" title="음소거">M</button>
+          <button data-timeline-action="solo" data-track-key="${key}" type="button" aria-label="${escapeHtml(def.name)} 솔로" title="솔로">S</button>
+          <button data-timeline-action="preview" data-track-key="${key}" type="button" aria-label="${escapeHtml(def.name)}만 재생" title="이 트랙만 듣기">▶</button>
+          ${isExtra ? `<button data-timeline-action="record" data-track-key="${key}" type="button" aria-label="${escapeHtml(def.name)} 녹음 대상으로 선택" title="녹음 대상">●</button>` : ""}
+        </div>
+        <input class="mixer-lane-volume" data-timeline-volume="${key}" type="range" min="0" max="150" step="1" value="100" aria-label="${escapeHtml(def.name)} 음량" />
+      </div>
+      <div class="mixer-lane-track" data-lane="${key}"></div>
+    </div>`;
+  }
+
+  function renderTimelineStructure() {
+    const rows = $("mixerTimelineRows");
+    if (!rows) return;
+    rows.innerHTML = state.trackDefs.map(timelineHeaderHtml).join("");
+  }
+
+  function renderTimelineTrackControls(def) {
+    const header = findDataElement("data-track-header", def.key);
+    if (!header) return;
+    const settings = state.settings[def.key] || defaultTrackSettings(def, state.recording);
+    const available = Boolean(state.buffers[def.key]);
+    const mutedBySolo = anySolo() && !settings.solo;
+    header.classList.toggle("is-selected", state.timeline.selectedTrackKey === def.key);
+    header.classList.toggle("is-muted", settings.muted || mutedBySolo);
+    header.classList.toggle("is-solo", settings.solo);
+    header.classList.toggle("is-empty", !available);
+    const volume = header.querySelector("[data-timeline-volume]");
+    if (volume) { volume.value = String(Math.round((settings.volume ?? 1) * 100)); volume.disabled = !available || state.overdub.active || state.exporting; }
+    ["mute", "solo", "preview"].forEach((action) => {
+      const button = header.querySelector(`[data-timeline-action="${action}"]`);
+      if (!button) return;
+      button.disabled = !available || state.overdub.active || state.exporting;
+      button.classList.toggle("is-active", action === "mute" ? settings.muted : action === "solo" ? settings.solo : false);
+    });
+    const record = header.querySelector('[data-timeline-action="record"]');
+    if (record) {
+      record.disabled = state.overdub.active || state.exporting;
+      record.classList.toggle("is-active", state.timeline.selectedTrackKey === def.key);
+    }
   }
 
   function renderLaneClips(def, model) {
@@ -292,7 +343,7 @@
       if (!clipWindow || !state.duration) return;
       element.style.left = `${(clipWindow.startSec / state.duration) * 100}%`;
       element.style.width = `${Math.max(0.35, (clipWindow.duration / state.duration) * 100)}%`;
-      element.title = `${def.name} · ${formatTime(clipWindow.duration)} · 시작 ${formatTime(clipWindow.startSec)}`;
+      element.title = `${def.name} · ${formatTime(clipWindow.duration)} · 시작 ${formatTime(clipWindow.startSec)}${clipWindow.muted ? " · 음소거" : ""}`;
       drawClipWaveform(element, def, clipWindow);
     });
   }
@@ -302,12 +353,15 @@
     if ($("mixerRulerMiddle")) $("mixerRulerMiddle").textContent = formatTime(state.duration / 2);
     if ($("mixerRulerEnd")) $("mixerRulerEnd").textContent = formatTime(state.duration);
     const content = $("mixerTimelineContent");
-    if (content) content.style.width = `${Math.max(100, state.timeline.zoom * 100)}%`;
+    if (content) {
+      content.style.width = `${Math.max(75, state.timeline.zoom * 100)}%`;
+      content.style.setProperty("--timeline-zoom", String(state.timeline.zoom));
+    }
   }
 
   function updateTimeline() {
     const model = timelineModel();
-    state.trackDefs.forEach((def) => renderLaneClips(def, model));
+    state.trackDefs.forEach((def) => { renderLaneClips(def, model); renderTimelineTrackControls(def); });
     updateRuler();
     updateLoopUi();
     bindTimelineClips();
@@ -377,7 +431,7 @@
 
   function scheduleClip(def, clipWindow, timelinePosition, startAt) {
     const buffer = state.buffers[def.key];
-    if (!buffer || !clipWindow?.duration) return false;
+    if (!buffer || !clipWindow?.duration || clipWindow.muted) return false;
     let sourceWhen = startAt;
     let contentOffset = timelinePosition - clipWindow.startSec;
     if (contentOffset < 0) { sourceWhen += -contentOffset; contentOffset = 0; }
@@ -502,8 +556,21 @@
   function toggle() { state.playing ? pause() : play(state.position); }
 
   function updateButtons() {
-    if ($("mixerPlay")) $("mixerPlay").textContent = state.playing && !state.overdub.active ? "일시정지" : "전체 재생";
-    if ($("mixerCompare")) $("mixerCompare").textContent = state.compareOriginal ? "현재 믹스로" : "원본 비교";
+    const playButton = $("mixerPlay");
+    if (playButton) {
+      const paused = state.playing && !state.overdub.active;
+      playButton.textContent = paused ? "⏸" : "▶";
+      playButton.setAttribute("aria-label", paused ? "일시정지" : "재생");
+      playButton.title = `${paused ? "일시정지" : "재생"} · Space`;
+      playButton.classList.toggle("is-playing", paused);
+    }
+    const compare = $("mixerCompare");
+    if (compare) {
+      compare.textContent = state.compareOriginal ? "MIX" : "A/B";
+      compare.setAttribute("aria-label", state.compareOriginal ? "현재 믹스로 돌아가기" : "원본과 현재 믹스 비교");
+      compare.title = state.compareOriginal ? "현재 믹스로 돌아가기" : "원본과 현재 믹스 비교";
+      compare.classList.toggle("is-active", state.compareOriginal);
+    }
   }
 
   function basePrefix(key) { return `mixer${key === "mr" ? "Mr" : "Vocal"}`; }
@@ -557,10 +624,10 @@
   }
 
   function renderExtraStructure() {
-    const lanes = $("mixerExtraLanes"); const grid = $("mixerExtraTrackGrid");
-    if (!lanes || !grid) return;
+    const grid = $("mixerExtraTrackGrid");
+    if (!grid) return;
     const extras = state.trackDefs.filter((def) => !def.base);
-    lanes.innerHTML = extras.map((def, index) => `<div class="mixer-lane"><b>ADD ${index + 1}</b><div class="mixer-lane-track" data-lane="${escapeHtml(def.key)}"></div></div>`).join("");
+    renderTimelineStructure();
     grid.innerHTML = extras.map(extraCardHtml).join("");
     extras.forEach(bindExtraCard);
     setTimelineSnap(state.timeline.snapMs);
@@ -600,6 +667,7 @@
       element.classList.toggle("is-selected", element.dataset.trackClip === key && element.dataset.clipId === state.timeline.selectedClipId);
     });
     document.querySelectorAll("#mixer [data-track-select]").forEach((card) => card.classList.toggle("is-selected", card.dataset.trackSelect === key));
+    state.trackDefs.forEach(renderTimelineTrackControls);
     BASE_KEYS.forEach((baseKey) => $(`${basePrefix(baseKey)}Row`)?.classList.toggle("is-selected", baseKey === key));
     updateSelectedClipInspector();
     updateRecordTargetUi();
@@ -616,16 +684,26 @@
 
   function updateSelectedClipInspector() {
     const selected = getSelectedClip();
-    const controls = ["mixerSplitClip", "mixerDeleteClip", "mixerClipPosition", "mixerClipSourceStart", "mixerClipSourceEnd", "mixerClipVolume", "mixerClipFadeIn", "mixerClipFadeOut"];
+    const controls = ["mixerSplitClip", "mixerMuteClip", "mixerDeleteClip", "mixerClipPosition", "mixerClipSourceStart", "mixerClipSourceEnd", "mixerClipVolume", "mixerClipFadeIn", "mixerClipFadeOut"];
     controls.forEach((id) => { const element = $(id); if (element) element.disabled = !selected || state.overdub.active || state.exporting; });
     if (!selected) {
       if ($("mixerClipInfo")) $("mixerClipInfo").textContent = "타임라인에서 클립을 선택해 주세요.";
+      const muteButton = $("mixerMuteClip");
+      if (muteButton) { muteButton.classList.remove("is-active"); muteButton.setAttribute("aria-pressed", "false"); }
       return;
     }
     const { def, clip, buffer } = selected;
     const model = timelineModel();
     const windowInfo = model.clipMap[clip.id];
-    if ($("mixerClipInfo")) $("mixerClipInfo").textContent = `${def.name} · ${formatTime(clip.sourceEndSec - clip.sourceStartSec)} · 타임라인 ${formatTime(windowInfo?.startSec || 0)}`;
+    if ($("mixerClipInfo")) $("mixerClipInfo").textContent = `${def.name} · ${formatTime(clip.sourceEndSec - clip.sourceStartSec)} · 타임라인 ${formatTime(windowInfo?.startSec || 0)}${clip.muted ? " · 음소거" : ""}`;
+    const muteButton = $("mixerMuteClip");
+    if (muteButton) {
+      muteButton.classList.toggle("is-active", Boolean(clip.muted));
+      muteButton.setAttribute("aria-pressed", String(Boolean(clip.muted)));
+      muteButton.setAttribute("aria-label", clip.muted ? "선택 클립 음소거 해제" : "선택 클립 음소거");
+      muteButton.title = clip.muted ? "선택 클립 음소거 해제" : "선택 클립 음소거";
+      muteButton.querySelector('[aria-hidden="true"]')?.replaceChildren(document.createTextNode(clip.muted ? "🔊" : "🔇"));
+    }
     if ($("mixerClipPosition")) $("mixerClipPosition").value = String(Math.round(Number(clip.timelineStartSec || 0) * 1000));
     if ($("mixerClipSourceStart")) { $("mixerClipSourceStart").value = String(Number(clip.sourceStartSec || 0).toFixed(2)); $("mixerClipSourceStart").max = String(Math.max(0, Number(clip.sourceEndSec || 0) - 0.05)); }
     if ($("mixerClipSourceEnd")) { $("mixerClipSourceEnd").value = String(Number(clip.sourceEndSec || 0).toFixed(2)); $("mixerClipSourceEnd").max = String(buffer?.duration || clip.sourceEndSec || 0); $("mixerClipSourceEnd").min = String(Number(clip.sourceStartSec || 0) + 0.05); }
@@ -662,6 +740,7 @@
   function renderControls() {
     BASE_KEYS.forEach(renderBaseTrackControls);
     state.trackDefs.filter((def) => !def.base).forEach(renderExtraTrackControls);
+    state.trackDefs.forEach(renderTimelineTrackControls);
     const master = Math.round(state.settings.masterVolume * 100);
     if ($("mixerMasterVolume")) $("mixerMasterVolume").value = String(master);
     if ($("mixerMasterVolumeNumber")) $("mixerMasterVolumeNumber").value = String(master);
@@ -697,6 +776,7 @@
     if ($("mixerRecordStartPosition")) $("mixerRecordStartPosition").disabled = !canRecordTarget || state.overdub.active || state.exporting;
     if ($("mixerRecordUsePlayhead")) $("mixerRecordUsePlayhead").disabled = !canRecordTarget || state.overdub.active || state.exporting;
     if ($("mixerOverdubCountIn")) $("mixerOverdubCountIn").disabled = !canRecordTarget || state.overdub.active || state.exporting;
+    state.trackDefs.forEach(renderTimelineTrackControls);
     updateHistoryButtons();
     updateSelectedClipInspector();
     updateRecordTargetUi();
@@ -849,7 +929,7 @@
     if (BASE_KEYS.includes(key)) renderBaseTrackControls(key); else if (def) renderExtraTrackControls(def);
     selectTrack(key, { keepClip: true }); updateLiveNodes();
     if (["offsetMs", "fadeIn", "fadeOut", "trimStartSec", "trimEndSec"].includes(field)) restartIfPlaying();
-    else updateTimeline();
+    else if (!["volume", "pan"].includes(field)) updateTimeline();
     scheduleSave();
   }
 
@@ -931,6 +1011,7 @@
     if (field === "sourceEndSec") return clamp(Number(value), Number(clip.sourceStartSec) + minimum, buffer?.duration || Number(clip.sourceEndSec));
     if (field === "volume") return clamp(Number(value), 0, 1.5);
     if (field === "fadeIn" || field === "fadeOut") return clamp(Number(value), 0, Math.min(10, (clip.sourceEndSec - clip.sourceStartSec) / 2));
+    if (field === "muted") return Boolean(value);
     return value;
   }
 
@@ -955,6 +1036,15 @@
     calculateDuration();
     if (state.playing && !state.overdub.active) restartIfPlaying();
     scheduleSave();
+  }
+
+  function toggleSelectedClipMute(trackKey = state.timeline.selectedTrackKey, clipId = state.timeline.selectedClipId) {
+    const clip = getClipRef(trackKey, clipId);
+    const def = getTrackDef(trackKey);
+    if (!clip || !def) { setStatus("음소거할 클립을 먼저 선택해 주세요.", "error"); return; }
+    setClipValue(trackKey, clipId, "muted", !clip.muted, { label: `${def.name} 클립 ${clip.muted ? "음소거 해제" : "음소거"}`, force: true });
+    if (state.playing && !state.overdub.active) restartIfPlaying();
+    setStatus(clip.muted ? "선택 클립의 음소거를 해제했습니다." : "선택한 클립만 음소거했습니다.", "idle");
   }
 
   function splitSelectedClip() {
@@ -1018,6 +1108,7 @@
   }
 
   function beginClipDrag(event, element) {
+    if (event.target.closest("[data-clip-action]")) return;
     if (state.overdub.active || state.exporting || !state.recording) return;
     const trackKey = element.dataset.trackClip; const clipId = element.dataset.clipId;
     const def = getTrackDef(trackKey); const clip = getClipRef(trackKey, clipId); const buffer = state.buffers[trackKey];
@@ -1108,7 +1199,10 @@
     element.addEventListener("pointerdown", (event) => beginClipDrag(event, element));
     element.addEventListener("pointermove", (event) => moveClipDrag(event, element));
     ["pointerup", "pointercancel"].forEach((name) => element.addEventListener(name, (event) => endClipDrag(event, element)));
-    element.addEventListener("click", (event) => { event.stopPropagation(); selectClip(element.dataset.trackClip, element.dataset.clipId, { scroll: event.detail > 1 }); });
+    element.querySelector('[data-clip-action="mute"]')?.addEventListener("click", (event) => {
+      event.preventDefault(); event.stopPropagation(); selectClip(element.dataset.trackClip, element.dataset.clipId); toggleSelectedClipMute(element.dataset.trackClip, element.dataset.clipId);
+    });
+    element.addEventListener("click", (event) => { if (event.target.closest("[data-clip-action]")) return; event.stopPropagation(); selectClip(element.dataset.trackClip, element.dataset.clipId, { scroll: event.detail > 1 }); });
     element.addEventListener("keydown", (event) => {
       if (["ArrowLeft", "ArrowRight"].includes(event.key)) {
         const clip = getClipRef(element.dataset.trackClip, element.dataset.clipId); if (!clip) return;
@@ -1129,9 +1223,19 @@
   }
 
   function seekFromTimelineEvent(event, lane) {
-    if (!state.duration || event.target.closest("[data-track-clip]")) return;
+    if (!state.duration || event.target.closest("[data-track-clip],[data-timeline-action],[data-timeline-volume]")) return;
     const rect = lane.getBoundingClientRect();
-    const next = clamp(((event.clientX - rect.left) / Math.max(1, rect.width)) * state.duration, 0, state.duration);
+    let left = rect.left;
+    let width = rect.width;
+    if (lane.classList.contains("mixer-timeline-ruler")) {
+      const editor = $("mixerTimelineContent");
+      const styles = editor ? getComputedStyle(editor) : null;
+      const headerWidth = Number.parseFloat(styles?.getPropertyValue("--track-header-width")) || 132;
+      const gap = Number.parseFloat(styles?.getPropertyValue("--timeline-gap")) || 8;
+      left += headerWidth + gap;
+      width = Math.max(1, width - headerWidth - gap);
+    }
+    const next = clamp(((event.clientX - left) / Math.max(1, width)) * state.duration, 0, state.duration);
     const wasPlaying = state.playing;
     setPosition(next);
     if (wasPlaying && !state.overdub.active) play(next);
@@ -1146,8 +1250,115 @@
     });
   }
 
-  function setTimelineZoom(value) {
-    state.timeline.zoom = clamp(value, 1, 4); updateTimeline();
+  function setTimelineZoom(value, anchor = null) {
+    const viewport = $("mixerTimelineViewport");
+    const content = $("mixerTimelineContent");
+    const beforeWidth = content?.scrollWidth || 1;
+    const beforeHeight = content?.scrollHeight || 1;
+    const x = anchor?.x ?? ((viewport?.clientWidth || 0) / 2);
+    const y = anchor?.y ?? ((viewport?.clientHeight || 0) / 2);
+    const xRatio = viewport ? (viewport.scrollLeft + x) / beforeWidth : 0;
+    const yRatio = viewport ? (viewport.scrollTop + y) / beforeHeight : 0;
+    state.timeline.zoom = clamp(value, 0.75, 4);
+    const select = $("mixerZoom");
+    if (select) select.value = String(state.timeline.zoom);
+    updateTimeline();
+    requestAnimationFrame(() => {
+      if (!viewport || !content) return;
+      viewport.scrollLeft = Math.max(0, xRatio * content.scrollWidth - x);
+      viewport.scrollTop = Math.max(0, yRatio * content.scrollHeight - y);
+    });
+  }
+
+  function bindTimelineHeaderControls() {
+    const rows = $("mixerTimelineRows");
+    if (!rows || rows.dataset.controlsBound === "true") return;
+    rows.dataset.controlsBound = "true";
+    rows.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-timeline-action]");
+      if (!button) return;
+      const key = button.dataset.trackKey;
+      const action = button.dataset.timelineAction;
+      if (!getTrackDef(key)) return;
+      event.preventDefault(); event.stopPropagation();
+      if (action === "select") selectTrack(key);
+      else if (action === "mute") toggleTrackFlag(key, "muted");
+      else if (action === "solo") toggleTrackFlag(key, "solo");
+      else if (action === "preview") playOnly(key);
+      else if (action === "record") { selectTrack(key); updateRecordTargetUi({ syncStart: true }); setStatus(`‘${getTrackDef(key)?.name || "추가 트랙"}’을 녹음 대상으로 선택했습니다.`, "idle"); }
+    });
+    rows.addEventListener("input", (event) => {
+      const input = event.target.closest("[data-timeline-volume]");
+      if (!input) return;
+      setTrackValue(input.dataset.timelineVolume, "volume", input.value, { label: `${getTrackDef(input.dataset.timelineVolume)?.name || "트랙"} 음량` });
+    });
+  }
+
+  function bindTimelineWheelZoom() {
+    const viewport = $("mixerTimelineViewport");
+    if (!viewport || viewport.dataset.wheelBound === "true") return;
+    viewport.dataset.wheelBound = "true";
+    viewport.addEventListener("wheel", (event) => {
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        const values = [0.75, 1, 1.25, 1.5, 2, 3, 4];
+        const currentIndex = values.reduce((best, value, index) => Math.abs(value - state.timeline.zoom) < Math.abs(values[best] - state.timeline.zoom) ? index : best, 0);
+        const nextIndex = clamp(currentIndex + (event.deltaY < 0 ? 1 : -1), 0, values.length - 1);
+        const rect = viewport.getBoundingClientRect();
+        setTimelineZoom(values[nextIndex], { x: event.clientX - rect.left, y: event.clientY - rect.top });
+      } else if (event.shiftKey) {
+        event.preventDefault();
+        viewport.scrollLeft += event.deltaY || event.deltaX;
+      }
+    }, { passive: false });
+  }
+
+  function timelineHeightStorageKey() {
+    return `hoonMusicTool.mixerTimelineHeight.${window.matchMedia?.("(max-width: 899px)")?.matches ? "mobile" : "desktop"}`;
+  }
+
+  function applyTimelineHeight(value, { save = false } = {}) {
+    const viewport = $("mixerTimelineViewport");
+    if (!viewport) return;
+    const min = window.matchMedia?.("(max-width: 899px)")?.matches ? 220 : 260;
+    const max = Math.max(min, Math.min(820, Math.round(window.innerHeight * 0.78)));
+    const height = Math.round(clamp(value, min, max));
+    viewport.style.height = `${height}px`;
+    if (save) { try { localStorage.setItem(timelineHeightStorageKey(), String(height)); } catch {} }
+  }
+
+  function restoreTimelineHeight() {
+    let saved = 0;
+    try { saved = Number(localStorage.getItem(timelineHeightStorageKey())) || 0; } catch {}
+    applyTimelineHeight(saved || (window.matchMedia?.("(max-width: 899px)")?.matches ? 300 : 360));
+  }
+
+  function bindTimelineResize() {
+    const handle = $("mixerTimelineResizeHandle");
+    const viewport = $("mixerTimelineViewport");
+    if (!handle || !viewport || handle.dataset.resizeBound === "true") return;
+    handle.dataset.resizeBound = "true";
+    handle.addEventListener("pointerdown", (event) => {
+      state.timeline.resize = { startY: event.clientY, startHeight: viewport.getBoundingClientRect().height, pointerId: event.pointerId };
+      handle.setPointerCapture?.(event.pointerId);
+      document.body.classList.add("is-resizing-mixer-timeline");
+      event.preventDefault();
+    });
+    handle.addEventListener("pointermove", (event) => {
+      if (!state.timeline.resize || state.timeline.resize.pointerId !== event.pointerId) return;
+      applyTimelineHeight(state.timeline.resize.startHeight + event.clientY - state.timeline.resize.startY);
+      event.preventDefault();
+    });
+    const end = (event) => {
+      if (!state.timeline.resize || state.timeline.resize.pointerId !== event.pointerId) return;
+      const height = viewport.getBoundingClientRect().height;
+      state.timeline.resize = null;
+      document.body.classList.remove("is-resizing-mixer-timeline");
+      applyTimelineHeight(height, { save: true });
+    };
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+    handle.addEventListener("dblclick", () => { applyTimelineHeight(window.matchMedia?.("(max-width: 899px)")?.matches ? 300 : 360, { save: true }); });
   }
 
   function setTimelineSnap(value) {
@@ -1194,6 +1405,7 @@
           trimEndSec: Math.max(0, buffer.duration - clipWindow.sourceEndSec),
           playableDuration: clipWindow.duration,
           clipVolume: clipWindow.volume,
+          clipMuted: Boolean(clipWindow.muted),
           clipFadeIn: clipWindow.fadeIn,
           clipFadeOut: clipWindow.fadeOut
         });
@@ -1435,6 +1647,7 @@
 
   function bindClipInspector() {
     $("mixerSplitClip")?.addEventListener("click", splitSelectedClip);
+    $("mixerMuteClip")?.addEventListener("click", () => toggleSelectedClipMute());
     $("mixerDeleteClip")?.addEventListener("click", deleteSelectedClip);
     $("mixerLoopStart")?.addEventListener("click", () => setLoopBoundary("start"));
     $("mixerLoopEnd")?.addEventListener("click", () => setLoopBoundary("end"));
@@ -1484,7 +1697,7 @@
     $("mixerUndo")?.addEventListener("click", undoEdit); $("mixerRedo")?.addEventListener("click", redoEdit);
     $("mixerZoom")?.addEventListener("change", (event) => setTimelineZoom(event.target.value));
     $("mixerSnap")?.addEventListener("change", (event) => setTimelineSnap(event.target.value));
-    bindMaster(); bindClipInspector(); BASE_KEYS.forEach(bindBaseTrack); bindTimelineClips(); setTimelineSnap($("mixerSnap")?.value || 10);
+    bindMaster(); bindClipInspector(); BASE_KEYS.forEach(bindBaseTrack); bindTimelineClips(); bindTimelineHeaderControls(); bindTimelineWheelZoom(); bindTimelineResize(); restoreTimelineHeight(); setTimelineSnap($("mixerSnap")?.value || 10);
     const seek = $("mixerSeek"); seek?.addEventListener("pointerdown", () => { state.seeking = true; });
     seek?.addEventListener("input", () => { state.seeking = true; state.position = clamp(seek.value, 0, state.duration); updateTimeUi(); });
     ["change", "pointerup", "pointercancel"].forEach((eventName) => seek?.addEventListener(eventName, () => { const wasPlaying = state.playing; const next = clamp(seek.value, 0, state.duration); state.seeking = false; state.position = next; if (wasPlaying && !state.overdub.active) play(next); else updateTimeUi(); }));
@@ -1505,7 +1718,7 @@
       if (document.hidden && state.overdub.active) finishOverdub();
       else if (document.hidden && state.playing) pause();
     });
-    window.addEventListener("resize", () => updateTimeline());
+    window.addEventListener("resize", () => { updateTimeline(); const viewport = $("mixerTimelineViewport"); if (viewport) applyTimelineHeight(viewport.getBoundingClientRect().height); });
     window.addEventListener("beforeunload", () => { revokeExport(); if (state.overdub.active) { try { state.overdub.recorder?.stop(); } catch {} cleanupOverdub(); } });
     state.initialized = true; refresh(); renderControls(); updateAvailability(); setStatus("트랙이 있는 녹음을 선택해 주세요.", "idle");
   }

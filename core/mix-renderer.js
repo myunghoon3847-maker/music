@@ -15,7 +15,7 @@
 
   function effectiveGain(track, settings, soloActive) {
     const value = settings[track.settingsKey || track.key] || {};
-    if (value.muted || (soloActive && !value.solo)) return 0;
+    if (value.muted || track.clipMuted || (soloActive && !value.solo)) return 0;
     return clamp(value.volume ?? 1, 0, 1.5) * clamp(track.clipVolume ?? 1, 0, 1.5);
   }
 

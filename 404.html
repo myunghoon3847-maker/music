@@ -14,7 +14,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=1941" />
+  <link rel="stylesheet" href="styles.css?v=1950" />
 </head>
 <body>
   <div class="app-shell">
@@ -480,6 +480,18 @@
           </div>
           <p id="mixerLegacyNotice" class="mixer-legacy-notice" hidden></p>
 
+          <div class="mixer-transport">
+            <div class="mixer-transport-icons" aria-label="믹서 재생 제어">
+              <button id="mixerPlay" class="mixer-transport-icon is-primary" type="button" disabled aria-label="재생" title="재생 · Space"><span aria-hidden="true">▶</span></button>
+              <button id="mixerStop" class="mixer-transport-icon" type="button" disabled aria-label="정지" title="정지 · Esc"><span aria-hidden="true">■</span></button>
+              <button id="mixerCompare" class="mixer-transport-icon mixer-control" type="button" disabled aria-label="원본과 현재 믹스 비교" title="원본과 현재 믹스 비교"><span aria-hidden="true">A/B</span></button>
+            </div>
+            <div class="mixer-seek-wrap">
+              <input id="mixerSeek" class="range mixer-control" type="range" min="0" max="1" step="0.01" value="0" disabled aria-label="믹서 재생 위치" />
+              <div><span id="mixerCurrentTime">00:00</span><span>/</span><span id="mixerDuration">00:00</span></div>
+            </div>
+          </div>
+
           <section class="mixer-editor" aria-label="멀티트랙 파형 편집기">
             <div class="mixer-timeline-tools">
               <div class="mixer-timeline-mode">
@@ -487,12 +499,13 @@
                 <span id="mixerSelectedTrack">트랙을 선택해 주세요</span>
               </div>
               <div class="mixer-timeline-options">
-                <label><span>확대</span><select id="mixerZoom" class="mixer-control" disabled><option value="1">전체</option><option value="1.5">150%</option><option value="2">200%</option><option value="4">400%</option></select></label>
+                <label><span>확대</span><select id="mixerZoom" class="mixer-control" disabled><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option><option value="3">300%</option><option value="4">400%</option></select></label>
                 <label><span>스냅</span><select id="mixerSnap" class="mixer-control" disabled><option value="10" selected>10ms</option><option value="50">50ms</option><option value="100">100ms</option></select></label>
               </div>
             </div>
             <div class="mixer-clip-toolbar" aria-label="클립 편집 도구">
               <button id="mixerSplitClip" class="secondary-btn mixer-control" type="button" disabled>분할 <kbd>S</kbd></button>
+              <button id="mixerMuteClip" class="secondary-btn mixer-icon-tool mixer-control" type="button" disabled aria-pressed="false" aria-label="선택 클립 음소거" title="선택 클립 음소거"><span aria-hidden="true">🔇</span><span class="sr-only">클립 음소거</span></button>
               <button id="mixerDeleteClip" class="secondary-btn is-danger mixer-control" type="button" disabled>클립 삭제</button>
               <span class="mixer-tool-divider" aria-hidden="true"></span>
               <button id="mixerLoopStart" class="secondary-btn mixer-control" type="button" disabled>반복 시작</button>
@@ -502,15 +515,14 @@
             </div>
             <div id="mixerTimelineViewport" class="mixer-timeline" aria-label="믹서 트랙 타임라인">
               <div id="mixerTimelineContent" class="mixer-timeline-content">
-                <div class="mixer-timeline-ruler"><span id="mixerRulerStart">0:00</span><span id="mixerRulerMiddle">0:00</span><span id="mixerRulerEnd">0:00</span></div>
-                <div class="mixer-lane"><b>MR</b><div class="mixer-lane-track" data-lane="mr"></div></div>
-                <div class="mixer-lane"><b>VOCAL</b><div class="mixer-lane-track" data-lane="vocal"></div></div>
-                <div id="mixerExtraLanes" class="mixer-extra-lanes"></div>
+                <div class="mixer-timeline-ruler"><span class="mixer-ruler-track-label">TRACK</span><span id="mixerRulerStart">0:00</span><span id="mixerRulerMiddle">0:00</span><span id="mixerRulerEnd">0:00</span></div>
+                <div id="mixerTimelineRows" class="mixer-timeline-rows"></div>
                 <div id="mixerLoopRegion" class="mixer-loop-region" hidden aria-hidden="true"></div>
                 <div id="mixerPlayhead" class="mixer-playhead" aria-hidden="true"><span id="mixerPlayheadTime">00:00</span></div>
               </div>
             </div>
-            <p class="mixer-timeline-help">클립을 좌우로 이동하고, 손잡이로 자르며, 재생선 위치에서 분할할 수 있습니다. 모바일에서는 클립을 길게 누르거나 가로로 밀어 이동합니다.</p>
+            <button id="mixerTimelineResizeHandle" class="mixer-timeline-resize-handle" type="button" aria-label="타임라인 높이 조절" title="위아래로 드래그해 타임라인 높이 조절"><span aria-hidden="true"></span></button>
+            <p class="mixer-timeline-help">트랙 왼쪽의 M·S·▶·● 버튼으로 화면을 내리지 않고 바로 조작합니다. Ctrl+휠은 가로·세로 비례 확대, Shift+휠은 좌우 이동입니다.</p>
             <div class="mixer-clip-inspector" aria-label="선택한 클립 설정">
               <div class="mixer-clip-inspector-title"><strong>선택한 클립</strong><span id="mixerClipInfo">타임라인에서 클립을 선택해 주세요.</span></div>
               <div class="mixer-clip-inspector-grid">
@@ -523,16 +535,6 @@
               </div>
             </div>
           </section>
-
-          <div class="mixer-transport">
-            <button id="mixerPlay" class="primary-btn" type="button" disabled>전체 재생</button>
-            <button id="mixerStop" class="secondary-btn" type="button" disabled>정지</button>
-            <button id="mixerCompare" class="secondary-btn mixer-control" type="button" disabled>원본 비교</button>
-            <div class="mixer-seek-wrap">
-              <input id="mixerSeek" class="range mixer-control" type="range" min="0" max="1" step="0.01" value="0" disabled aria-label="믹서 재생 위치" />
-              <div><span id="mixerCurrentTime">00:00</span><span>/</span><span id="mixerDuration">00:00</span></div>
-            </div>
-          </div>
 
           <div class="mixer-track-quickbar" aria-label="트랙 추가 및 녹음">
             <button id="mixerAddTrack" class="mixer-add-track-btn" type="button" disabled aria-label="빈 트랙 추가" title="빈 트랙 추가">+</button>
@@ -798,14 +800,14 @@
       </div>
       <div class="transport-shortcuts" aria-label="키보드 단축키">Space 재생 · R 녹음 · Esc 정지</div>
       <div class="transport-actions">
-        <button id="transportPlay" type="button" aria-keyshortcuts="Space">재생</button>
-        <button id="transportStop" type="button" aria-keyshortcuts="Escape">정지</button>
-        <button id="transportRecord" class="is-record" type="button" aria-keyshortcuts="R">● 녹음</button>
+        <button id="transportPlay" type="button" aria-keyshortcuts="Space" aria-label="재생" title="재생 · Space">▶</button>
+        <button id="transportStop" type="button" aria-keyshortcuts="Escape" aria-label="정지" title="정지 · Esc">■</button>
+        <button id="transportRecord" class="is-record" type="button" aria-keyshortcuts="R" aria-label="녹음" title="녹음 · R">●</button>
       </div>
     </section>
 
     <footer>
-      <p>PC 작업실 · 간편 트랙 추가 · 구간 녹음 · v1.9.4.1</p>
+      <p>PC 작업실 · 고정 트랙 컨트롤 · 클립 음소거 · v1.9.5</p>
     </footer>
   </div>
 
@@ -849,13 +851,13 @@
     </section>
   </div>
 
-  <script src="core/projects.js?v=1941" defer></script>
-  <script src="core/transport.js?v=1941" defer></script>
-  <script src="core/timeline.js?v=1941" defer></script>
-  <script src="core/edit-history.js?v=1941" defer></script>
-  <script src="core/waveform.js?v=1941" defer></script>
-  <script src="core/mix-renderer.js?v=1941" defer></script>
-  <script src="core/mixer.js?v=1941" defer></script>
-  <script src="app.js?v=1941" defer></script>
+  <script src="core/projects.js?v=1950" defer></script>
+  <script src="core/transport.js?v=1950" defer></script>
+  <script src="core/timeline.js?v=1950" defer></script>
+  <script src="core/edit-history.js?v=1950" defer></script>
+  <script src="core/waveform.js?v=1950" defer></script>
+  <script src="core/mix-renderer.js?v=1950" defer></script>
+  <script src="core/mixer.js?v=1950" defer></script>
+  <script src="app.js?v=1950" defer></script>
 </body>
 </html>
