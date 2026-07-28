@@ -2,7 +2,7 @@
   "id": "./",
   "name": "훈뮤직툴 Studio - 음악 작업실",
   "short_name": "훈뮤직툴",
-  "description": "PC 작업실 UI, 프로젝트별 녹음 관리, 보컬·MR 멀티트랙 재생·추가 녹음·WAV 믹스 내보내기, 코드 진행, 보컬튠, 메트로놈, 튜너 도구",
+  "description": "PC 작업실 UI, 프로젝트별 녹음 관리, 보컬·MR 파형 타임라인·비파괴 자르기·추가 녹음·WAV 믹스 내보내기, 코드 진행, 보컬튠, 메트로놈, 튜너 도구",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

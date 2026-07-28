@@ -61,7 +61,9 @@
     const sampleRate = clamp(options.sampleRate || 44100, 22050, 48000);
     const duration = Math.max(0, ...tracks.map((track) => {
       const trimStart = clamp(track.trimStartSec || 0, 0, track.buffer.duration);
-      return Math.max(0, track.startSec) + Math.max(0, track.buffer.duration - trimStart);
+      const trimEnd = clamp(track.trimEndSec || 0, 0, Math.max(0, track.buffer.duration - trimStart));
+      const playable = Number.isFinite(track.playableDuration) ? clamp(track.playableDuration, 0, track.buffer.duration - trimStart) : Math.max(0, track.buffer.duration - trimStart - trimEnd);
+      return Math.max(0, track.startSec) + playable;
     }));
     if (!duration) throw new Error("내보낼 오디오 길이가 없습니다.");
 
@@ -93,7 +95,8 @@
     tracks.forEach((track) => {
       const trackSettings = settings[track.key] || {};
       const trimStart = clamp(track.trimStartSec || 0, 0, track.buffer.duration);
-      const playableDuration = Math.max(0, track.buffer.duration - trimStart);
+      const trimEnd = clamp(track.trimEndSec || 0, 0, Math.max(0, track.buffer.duration - trimStart));
+      const playableDuration = Number.isFinite(track.playableDuration) ? clamp(track.playableDuration, 0, track.buffer.duration - trimStart) : Math.max(0, track.buffer.duration - trimStart - trimEnd);
       if (!playableDuration) return;
       const source = offline.createBufferSource();
       source.buffer = track.buffer;

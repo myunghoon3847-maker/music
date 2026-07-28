@@ -1,4 +1,4 @@
-const CACHE_NAME = "hoon-music-tool-v1.9.1-mix-export-overdub";
+const CACHE_NAME = "hoon-music-tool-v1.9.2-waveform-timeline-editor";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,6 +6,9 @@ const APP_SHELL = [
   "./app.js",
   "./core/projects.js",
   "./core/transport.js",
+  "./core/timeline.js",
+  "./core/edit-history.js",
+  "./core/waveform.js",
   "./core/mix-renderer.js",
   "./core/mixer.js",
   "./core/wav-encoder.worker.js",
