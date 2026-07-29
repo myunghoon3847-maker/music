@@ -14,7 +14,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=1963" />
+  <link rel="stylesheet" href="styles.css?v=1964" />
 </head>
 <body>
   <div class="app-shell">
@@ -474,6 +474,29 @@
               <button id="mixerReset" class="secondary-btn mixer-control" type="button" disabled>전체 초기화</button>
             </div>
           </div>
+          <div class="mixer-safety-toolbar" aria-label="녹음과 편집 저장 보호">
+            <div class="mixer-safety-status">
+              <strong>저장 안전</strong>
+              <span id="mixerStorageStatus">저장 공간 확인 중</span>
+            </div>
+            <div class="mixer-safety-actions">
+              <button id="mixerPersistStorage" class="mixer-mini-action" type="button">저장 보호 켜기</button>
+              <button id="mixerCheckpoint" class="mixer-mini-action" type="button" disabled>안전 저장</button>
+              <button id="mixerExportSessionBackup" class="mixer-mini-action" type="button" disabled>세션 백업</button>
+              <input id="mixerImportSessionBackupInput" type="file" accept=".hoonmusic,application/x-hoonmusic" hidden />
+              <button id="mixerImportSessionBackup" class="mixer-mini-action" type="button">백업 불러오기</button>
+            </div>
+          </div>
+          <div id="mixerDraftNotice" class="mixer-draft-notice" hidden>
+            <div>
+              <strong>미완료 녹음이 발견되었습니다</strong>
+              <span id="mixerDraftMessage">브라우저가 종료되기 전까지 저장된 녹음 조각을 복구할 수 있습니다.</span>
+            </div>
+            <div>
+              <button id="mixerRecoverDraft" class="secondary-btn" type="button">녹음 복구</button>
+              <button id="mixerDiscardDraft" class="text-btn" type="button">삭제</button>
+            </div>
+          </div>
           <div id="mixerRecoveryNotice" class="mixer-recovery-notice" hidden>
             <strong>편집 데이터 보호 모드</strong>
             <span id="mixerRecoveryMessage">저장된 클립을 안전하게 다시 읽고 있습니다.</span>
@@ -848,7 +871,7 @@
     </section>
 
     <footer>
-      <p>편집 복구 · 믹서 녹음 통합 · v1.9.6.3</p>
+      <p>안전 저장 · 녹음 임시 복구 · v1.9.6.4</p>
     </footer>
   </div>
 
@@ -892,13 +915,13 @@
     </section>
   </div>
 
-  <script src="core/projects.js?v=1963" defer></script>
-  <script src="core/transport.js?v=1963" defer></script>
-  <script src="core/timeline.js?v=1963" defer></script>
-  <script src="core/edit-history.js?v=1963" defer></script>
-  <script src="core/waveform.js?v=1963" defer></script>
-  <script src="core/mix-renderer.js?v=1963" defer></script>
-  <script src="core/mixer.js?v=1963" defer></script>
-  <script src="app.js?v=1963" defer></script>
+  <script src="core/projects.js?v=1964" defer></script>
+  <script src="core/transport.js?v=1964" defer></script>
+  <script src="core/timeline.js?v=1964" defer></script>
+  <script src="core/edit-history.js?v=1964" defer></script>
+  <script src="core/waveform.js?v=1964" defer></script>
+  <script src="core/mix-renderer.js?v=1964" defer></script>
+  <script src="core/mixer.js?v=1964" defer></script>
+  <script src="app.js?v=1964" defer></script>
 </body>
 </html>

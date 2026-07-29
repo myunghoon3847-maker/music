@@ -12,7 +12,7 @@
     context: null, loadingToken: 0, playing: false, compareOriginal: false, startAt: 0, startPosition: 0,
     position: 0, duration: 0, mixDuration: 0, frameId: null, endTimer: null, saveTimer: null,
     saveRevision: 0, savedRevision: 0, savePending: null, saveInFlight: false, savePromise: null, saveFailures: new Map(),
-    recoveryLocked: false, recoveryReason: "", recoveryBackup: null, importingMr: false,
+    recoveryLocked: false, recoveryReason: "", recoveryBackup: null, importingMr: false, pendingDraft: null, storageStatus: null,
     restartTimer: null, seeking: false, initialized: false, exportUrl: "", exportBlob: null, exporting: false, addingTrack: false,
     timeline: { zoom: 1, snapMs: 10, selectedTrackKey: "", selectedClipId: "", drag: null, loopEnabled: false, loopStartSec: 0, loopEndSec: 0, lastAutoScrollAt: 0, resize: null },
     history: window.HoonEditHistory?.create?.(60) || null, historyCoalesce: { key: "", at: 0 },
@@ -20,7 +20,8 @@
       active: false, recorder: null, stream: null, chunks: [], source: null, gate: null, destination: null,
       analyser: null, levelData: null, levelFrame: null, startAt: 0, recorderStartAt: 0, timerId: null,
       autoStopTimer: null, countInNodes: [], stopping: false, targetTrackId: "", recordStartSec: 0,
-      recordEndSec: 0, monitorStartSec: 0, timelineRawStartSec: 0, mode: "manual", overlapMode: "keep"
+      recordEndSec: 0, monitorStartSec: 0, timelineRawStartSec: 0, mode: "manual", overlapMode: "keep",
+      draftId: "", chunkSequence: 0, draftWritePromise: Promise.resolve(), clipTimelineStartSec: 0, draftError: null
     }
   };
 
@@ -198,6 +199,150 @@
     if (retry) {
       retry.hidden = mode !== "error" || !getCurrentSaveFailure();
       retry.disabled = state.saveInFlight;
+    }
+  }
+
+
+  function formatBytes(bytes) {
+    const value = Math.max(0, Number(bytes) || 0);
+    if (value < 1024) return `${Math.round(value)}B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)}KB`;
+    if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)}MB`;
+    return `${(value / 1024 / 1024 / 1024).toFixed(1)}GB`;
+  }
+
+  async function refreshStorageSafety({ request = false } = {}) {
+    const statusElement = $("mixerStorageStatus");
+    try {
+      const status = request
+        ? await state.callbacks.requestPersistentStorage?.()
+        : await state.callbacks.getStorageStatus?.();
+      state.storageStatus = status || null;
+      if (!statusElement || !status) return status;
+      const quotaText = status.quota ? ` · 여유 ${formatBytes(status.free)}` : "";
+      statusElement.textContent = `${status.persisted ? "영구 저장 보호 켜짐" : "브라우저 기본 저장"}${quotaText}`;
+      statusElement.dataset.mode = status.critical ? "critical" : status.warning ? "warning" : "safe";
+      const persistButton = $("mixerPersistStorage");
+      if (persistButton) {
+        persistButton.textContent = status.persisted ? "저장 보호 켜짐" : "저장 보호 켜기";
+        persistButton.disabled = Boolean(status.persisted);
+      }
+      return status;
+    } catch (error) {
+      if (statusElement) {
+        statusElement.textContent = `저장 공간 확인 실패 · ${error.message}`;
+        statusElement.dataset.mode = "warning";
+      }
+      return null;
+    }
+  }
+
+  async function ensureRecordingStorageSafety(requiredBytes = 0) {
+    let status = await refreshStorageSafety({ request: true });
+    if (!status) return true;
+    const required = Math.max(0, Number(requiredBytes) || 0);
+    if (status.critical || (status.free && status.free < required + 20 * 1024 * 1024)) {
+      throw new Error(`기기 저장 공간이 부족합니다. 현재 여유 공간은 약 ${formatBytes(status.free)}입니다.`);
+    }
+    if (status.warning) {
+      return confirm(`저장 공간이 약 ${formatBytes(status.free)} 남았습니다. 녹음을 계속할까요? 먼저 세션 백업을 권장합니다.`);
+    }
+    return true;
+  }
+
+  async function createSafetyCheckpoint() {
+    if (!state.recording || !state.callbacks.createCheckpoint) return;
+    try {
+      await flushSaveQueue({ force: true });
+      await state.callbacks.createCheckpoint(state.recording, "사용자 안전 저장");
+      await refreshRecoveryAvailability();
+      setSaveState("saved", "안전 저장됨");
+      setStatus("현재 편집 상태를 별도의 복구 지점으로 저장했습니다.", "idle");
+    } catch (error) {
+      setStatus(`안전 저장 실패: ${error.message}`, "error");
+    }
+  }
+
+  async function exportSessionBackup() {
+    if (!state.recording || !state.callbacks.exportSessionBackup) return;
+    try {
+      await flushSaveQueue({ force: true });
+      const result = await state.callbacks.exportSessionBackup(state.recording);
+      if (!result?.blob) throw new Error("백업 파일을 만들지 못했습니다.");
+      const url = URL.createObjectURL(result.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = result.filename || "훈뮤직툴-세션.hoonmusic";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+      setStatus("MR·녹음 원본·편집 내용을 하나의 세션 백업 파일로 저장했습니다.", "idle");
+    } catch (error) {
+      setStatus(`세션 백업 실패: ${error.message}`, "error");
+    }
+  }
+
+  async function importSessionBackup(file) {
+    if (!(file instanceof Blob) || !state.callbacks.importSessionBackup) return;
+    try {
+      const storageOk = await ensureRecordingStorageSafety(file.size);
+      if (!storageOk) return;
+      const updated = await state.callbacks.importSessionBackup(file);
+      refresh();
+      if (updated) await selectRecording(updated.id);
+      setStatus("세션 백업을 새 복구본으로 불러왔습니다.", "idle");
+    } catch (error) {
+      setStatus(`백업 불러오기 실패: ${error.message}`, "error");
+    } finally {
+      const input = $("mixerImportSessionBackupInput");
+      if (input) input.value = "";
+    }
+  }
+
+  async function refreshPendingDraft() {
+    const notice = $("mixerDraftNotice");
+    state.pendingDraft = null;
+    if (!notice || !state.recording?.id || !state.callbacks.getRecordingDrafts) {
+      if (notice) notice.hidden = true;
+      return;
+    }
+    try {
+      const drafts = await state.callbacks.getRecordingDrafts(state.recording.id);
+      state.pendingDraft = drafts?.find?.((draft) => Number(draft.totalBytes) > 0 || Number(draft.chunkCount) > 0) || null;
+      notice.hidden = !state.pendingDraft;
+      if (state.pendingDraft && $("mixerDraftMessage")) {
+        const size = formatBytes(state.pendingDraft.totalBytes || 0);
+        const time = new Date(state.pendingDraft.updatedAt || state.pendingDraft.createdAt).toLocaleString("ko-KR");
+        $("mixerDraftMessage").textContent = `${state.pendingDraft.targetTrackName || "보컬 트랙"} · ${size} · 마지막 저장 ${time}`;
+      }
+    } catch {
+      notice.hidden = true;
+    }
+  }
+
+  async function recoverPendingDraft() {
+    if (!state.pendingDraft || !state.callbacks.recoverRecordingDraft) return;
+    try {
+      const updated = await state.callbacks.recoverRecordingDraft(state.pendingDraft.draftId);
+      state.pendingDraft = null;
+      if (updated) await loadRecording(updated);
+      setStatus("브라우저 종료 전에 임시 저장된 녹음을 새 클립으로 복구했습니다.", "idle");
+    } catch (error) {
+      setStatus(`미완료 녹음 복구 실패: ${error.message}`, "error");
+    }
+  }
+
+  async function discardPendingDraft() {
+    if (!state.pendingDraft || !state.callbacks.discardRecordingDraft) return;
+    if (!confirm("미완료 녹음 조각을 삭제할까요? 삭제하면 복구할 수 없습니다.")) return;
+    try {
+      await state.callbacks.discardRecordingDraft(state.pendingDraft.draftId);
+      state.pendingDraft = null;
+      await refreshPendingDraft();
+      setStatus("미완료 녹음 조각을 삭제했습니다.", "idle");
+    } catch (error) {
+      setStatus(`미완료 녹음 삭제 실패: ${error.message}`, "error");
     }
   }
 
@@ -829,6 +974,8 @@
       element.classList.toggle("is-selected", element.dataset.trackClip === key && element.dataset.clipId === state.timeline.selectedClipId);
     });
     document.querySelectorAll("#mixer [data-track-select]").forEach((card) => card.classList.toggle("is-selected", card.dataset.trackSelect === key));
+    if ($("mixerCheckpoint")) $("mixerCheckpoint").disabled = !state.recording || state.overdub.active || state.exporting || state.saveInFlight;
+    if ($("mixerExportSessionBackup")) $("mixerExportSessionBackup").disabled = !state.recording || state.overdub.active || state.exporting || state.saveInFlight;
     getVisibleTrackDefs().forEach(renderTimelineTrackControls);
     BASE_KEYS.forEach((baseKey) => $(`${basePrefix(baseKey)}Row`)?.classList.toggle("is-selected", baseKey === key));
     updateSelectedClipInspector();
@@ -985,7 +1132,8 @@
     Object.values(state.buffers).forEach((buffer) => window.HoonWaveform?.clear?.(buffer));
     state.recording = recording || null; state.selectedId = recording ? String(recording.id) : "";
     setRecoveryMode(false);
-    setSaveState(getCurrentSaveFailure() ? "error" : "saved");
+    if (recording?.integrityWarning) setRecoveryMode(true, recording.integrityWarning);
+    setSaveState(getCurrentSaveFailure() ? "error" : state.recoveryLocked ? "error" : "saved");
     state.trackDefs = buildTrackDefs(recording); state.buffers = {}; state.originalBuffer = null;
     state.settings = normalizeSettings(recording, state.trackDefs);
     const savedSettingsSnapshot = clone(state.settings);
@@ -994,7 +1142,13 @@
     Object.assign(state.timeline, { selectedTrackKey: "", selectedClipId: "", drag: null, loopEnabled: false, loopStartSec: 0, loopEndSec: 0 });
     state.history?.clear?.(); state.historyCoalesce = { key: "", at: 0 };
     updateMeta(); renderExtraStructure(); renderControls(); calculateDuration();
-    if (!recording) { setStatus("트랙이 있는 녹음을 선택해 주세요.", "idle"); updateAvailability(); return; }
+    if (!recording) {
+      setStatus("트랙이 있는 녹음을 선택해 주세요.", "idle");
+      updateAvailability();
+      await refreshPendingDraft();
+      refreshStorageSafety();
+      return;
+    }
     const token = ++state.loadingToken; setStatus("저장된 트랙과 클립 파형을 불러오고 있습니다.", "loading"); updateAvailability();
     try {
       const entries = [...state.trackDefs.map((def) => [def.key, def.blob]), ["__original", recording.blob]];
@@ -1025,6 +1179,8 @@
       renderExtraStructure(); calculateDuration(); renderControls(); updateMeta();
       if (!hadClipData && !state.recoveryLocked) scheduleSave();
       await refreshRecoveryAvailability();
+      await refreshPendingDraft();
+      refreshStorageSafety();
       const clipCount = visibleDefs.reduce((sum, def) => sum + (state.settings[def.key]?.clips?.length || 0), 0);
       const emptyCount = visibleDefs.filter((def) => !def.base && !trackHasAudio(def.key)).length;
       setStatus(state.recoveryLocked ? `편집 데이터 보호 모드 · ${clipCount}개 클립을 보존했습니다.` : `${visibleDefs.length}개 트랙 · ${clipCount}개 클립${emptyCount ? ` · 빈 트랙 ${emptyCount}개` : ""}를 준비했습니다.`, state.recoveryLocked ? "error" : "idle");
@@ -1094,6 +1250,8 @@
     if ($("mixerImportMr")) $("mixerImportMr").disabled = true;
     try {
       if (!String(file.type || "").startsWith("audio/") && !/\.(mp3|wav|m4a|aac|ogg|webm)$/i.test(file.name || "")) throw new Error("오디오 파일을 선택해 주세요.");
+      const storageOk = await ensureRecordingStorageSafety(file.size);
+      if (!storageOk) throw new Error("저장 공간 확인 후 MR 가져오기가 취소되었습니다.");
       const updated = await state.callbacks.createSessionFromMr?.(file);
       if (!updated) throw new Error("MR 녹음 세션을 생성하지 못했습니다.");
       refresh();
@@ -1785,7 +1943,7 @@
     const references = externalClipReferences(def.key);
     const message = references.length
       ? `‘${def.name}’에서 다른 트랙으로 옮긴 클립 ${references.length}개가 있습니다. 트랙 줄은 삭제하되 이동한 클립의 오디오 소스는 내부에 보존할까요?`
-      : `‘${def.name}’ 트랙을 삭제할까요? 원본 녹음 파일도 함께 삭제됩니다.`;
+      : `‘${def.name}’ 트랙을 화면에서 삭제할까요? 원본 녹음은 편집 복구용으로 세션 내부에 보관됩니다.`;
     if (!confirm(message)) return;
     try {
       await flushSaveQueue({ force: true });
@@ -1802,7 +1960,7 @@
         updated = await state.callbacks.removeExtraTrack?.(latest, def.data.id);
       }
       if (updated) await loadRecording(updated);
-      setStatus(references.length ? "트랙 줄을 삭제하고 이동한 클립의 오디오 소스는 안전하게 보존했습니다." : "추가 트랙을 삭제했습니다.", "idle");
+      setStatus(references.length ? "트랙 줄을 삭제하고 이동한 클립의 오디오 소스는 안전하게 보존했습니다." : "트랙을 화면에서 삭제하고 원본 녹음은 복구용으로 보관했습니다.", "idle");
     } catch (error) { setStatus(`트랙을 삭제하지 못했습니다: ${error.message}`, "error"); }
   }
 
@@ -2021,7 +2179,7 @@
     state.overdub.countInNodes.forEach((node) => { try { node.stop?.(); } catch {} try { node.disconnect?.(); } catch {} });
     try { state.overdub.source?.disconnect(); } catch {} try { state.overdub.gate?.disconnect(); } catch {} try { state.overdub.analyser?.disconnect(); } catch {}
     state.overdub.stream?.getTracks?.().forEach((track) => track.stop());
-    Object.assign(state.overdub, { active: false, recorder: null, stream: null, chunks: [], source: null, gate: null, destination: null, analyser: null, levelData: null, levelFrame: null, startAt: 0, recorderStartAt: 0, timerId: null, autoStopTimer: null, countInNodes: [], stopping: false, targetTrackId: "", recordStartSec: 0, recordEndSec: 0, monitorStartSec: 0, timelineRawStartSec: 0, mode: "manual", overlapMode: "keep" });
+    Object.assign(state.overdub, { active: false, recorder: null, stream: null, chunks: [], source: null, gate: null, destination: null, analyser: null, levelData: null, levelFrame: null, startAt: 0, recorderStartAt: 0, timerId: null, autoStopTimer: null, countInNodes: [], stopping: false, targetTrackId: "", recordStartSec: 0, recordEndSec: 0, monitorStartSec: 0, timelineRawStartSec: 0, mode: "manual", overlapMode: "keep", draftId: "", chunkSequence: 0, draftWritePromise: Promise.resolve(), clipTimelineStartSec: 0, draftError: null });
     if ($("mixerOverdubTimer")) $("mixerOverdubTimer").textContent = "00:00";
     if ($("mixerOverdubLevel")) $("mixerOverdubLevel").style.width = "0%";
     updateAvailability();
@@ -2053,8 +2211,6 @@
       takeType: "lane-clip",
       ...basePatch
     };
-    const withSource = await state.callbacks.createEmptyTrack?.(state.recording, sourceTrack);
-    if (!withSource) throw new Error("새 녹음 소스를 저장하지 못했습니다.");
     const sourceTrackKey = getTrackKey(sourceTrack);
     const sourceStartSec = Math.max(0, Number(basePatch.trimStartMs || 0) / 1000);
     const targetOffsetSec = (Number(state.settings[targetDef.key]?.offsetMs) || 0) / 1000;
@@ -2071,12 +2227,13 @@
       muted: false,
       name: `${targetDef.name} · ${formatTime(recordStartSec)}`
     };
+    if (typeof state.callbacks.appendRecordedClip !== "function") throw new Error("안전 녹음 클립 저장 기능이 연결되지 않았습니다.");
     rememberEdit(`${targetDef.name} 새 녹음 클립 추가`, `record-clip:${clip.id}`, true);
-    state.settings[targetDef.key].clips ||= [];
-    state.settings[targetDef.key].clips.push(clip);
-    state.settings[targetDef.key].clips.sort((a, b) => Number(a.timelineStartSec || 0) - Number(b.timelineStartSec || 0));
-    state.settings[targetDef.key].clipModelVersion = 1;
-    return state.callbacks.saveSettings?.(withSource, clone(state.settings)) || withSource;
+    const updated = await state.callbacks.appendRecordedClip(state.recording, sourceTrack, targetDef.data.id, clip);
+    if (!updated) throw new Error("새 녹음 클립을 저장하지 못했습니다.");
+    const savedTrackSettings = updated.mixSettings?.[targetDef.key];
+    if (savedTrackSettings) state.settings[targetDef.key] = clone(savedTrackSettings);
+    return updated;
   }
 
   async function saveOverlappingManualTake(targetDef, basePatch, recordStartSec) {
@@ -2153,6 +2310,13 @@
     if (maxStart - recordStartSec < 0.25) { setStatus("녹음 시작 위치가 곡의 끝과 너무 가깝습니다.", "error"); return; }
     if (mode === "punch" && recordEndSec - recordStartSec < 0.25) { setStatus("펀치 인 종료 위치는 시작 위치보다 0.25초 이상 뒤여야 합니다.", "error"); return; }
     const overlapMode = mode === "punch" ? ($("mixerPunchOverlap")?.value || "keep") : "keep";
+    try {
+      const storageOk = await ensureRecordingStorageSafety();
+      if (!storageOk) return;
+    } catch (error) {
+      setStatus(`녹음을 시작할 수 없습니다: ${error.message}`, "error");
+      return;
+    }
     state.callbacks.stopOtherAudio?.(); stop({ silent: true, keepOverdub: true });
     try {
       const context = ensureContext();
@@ -2168,13 +2332,46 @@
       const monitorAt = recorderStartAt + 0.16 + countdownOnlySec;
       const startAt = monitorAt + (recordStartSec - monitorStartSec);
       const currentModel = timelineModel();
+      const timelineRawStartSec = recordStartSec - Number(currentModel.shiftSec || 0);
+      const targetOffsetSec = (Number(state.settings[targetDef.key]?.offsetMs) || 0) / 1000;
+      const clipTimelineStartSec = timelineRawStartSec - targetOffsetSec;
+      const trimStartMs = Math.max(0, Math.round((startAt - recorderStartAt) * 1000));
+      if (!state.callbacks.beginRecordingDraft || !state.callbacks.appendRecordingDraftChunk) {
+        throw new Error("안전 녹음 임시 저장 기능이 연결되지 않았습니다.");
+      }
+      const draft = await state.callbacks.beginRecordingDraft(state.recording, {
+        targetTrackId: String(targetDef.data.id),
+        targetTrackName: targetDef.name,
+        mode,
+        overlapMode,
+        recordStartSec,
+        recordEndSec,
+        timelineRawStartSec,
+        clipTimelineStartSec,
+        trimStartMs,
+        mimeType: recorder.mimeType || mimeType || "audio/webm"
+      });
       Object.assign(state.overdub, {
         active: true, recorder, stream, chunks: [], source, gate, destination, analyser,
         levelData: new Uint8Array(analyser.fftSize), startAt, recorderStartAt, stopping: false,
         targetTrackId: String(targetDef.data.id), recordStartSec, recordEndSec, monitorStartSec,
-        timelineRawStartSec: recordStartSec - Number(currentModel.shiftSec || 0), mode, overlapMode
+        timelineRawStartSec, mode, overlapMode, draftId: draft?.draftId || "", chunkSequence: 0,
+        draftWritePromise: Promise.resolve(), clipTimelineStartSec, draftError: null
       });
-      recorder.ondataavailable = (event) => { if (event.data?.size) state.overdub.chunks.push(event.data); };
+      recorder.ondataavailable = (event) => {
+        if (!event.data?.size) return;
+        state.overdub.chunks.push(event.data);
+        if (!state.overdub.draftId) return;
+        const sequence = state.overdub.chunkSequence++;
+        const draftId = state.overdub.draftId;
+        state.overdub.draftWritePromise = state.overdub.draftWritePromise
+          .catch(() => {})
+          .then(() => state.callbacks.appendRecordingDraftChunk(draftId, sequence, event.data))
+          .catch((error) => {
+            state.overdub.draftError = error;
+            setStatus(`녹음은 계속되지만 임시 저장에 실패했습니다: ${error.message}`, "error");
+          });
+      };
       recorder.onerror = (event) => setStatus(`추가 트랙 녹음 오류: ${event.error?.message || "알 수 없는 오류"}`, "error");
       recorder.start(500); gate.gain.setValueAtTime(0, context.currentTime); gate.gain.setValueAtTime(1, startAt);
       gate.gain.setValueAtTime(0, startAt + Math.max(0.25, recordEndSec - recordStartSec));
@@ -2192,7 +2389,13 @@
       setStatus(`${label} ‘${targetDef.name}’ 녹음을 준비합니다.`, "recording");
       if ($("mixerOverdubStatus")) $("mixerOverdubStatus").textContent = countIn ? `${formatTime(monitorStartSec)}부터 미리 재생하고 ${formatTime(recordStartSec)}에서 녹음합니다.` : `${formatTime(recordStartSec)}에서 곧 녹음합니다.`;
       state.callbacks.transportUpdate?.(state.recording.name || "믹서", `${targetDef.name} ${mode === "punch" ? "펀치 인" : "구간"} 녹음 중`, true, "recording");
-    } catch (error) { cleanupOverdub(); stop({ silent: true, keepOverdub: true }); updateMediaSession("none"); setStatus(`선택 트랙 녹음을 시작하지 못했습니다: ${error.message}`, "error"); }
+    } catch (error) {
+      const failedDraftId = state.overdub.draftId;
+      const hadChunks = state.overdub.chunks?.length;
+      cleanupOverdub(); stop({ silent: true, keepOverdub: true }); updateMediaSession("none");
+      if (failedDraftId && !hadChunks) state.callbacks.discardRecordingDraft?.(failedDraftId).catch?.(() => {});
+      setStatus(`선택 트랙 녹음을 시작하지 못했습니다: ${error.message}`, "error");
+    }
   }
 
   async function finishOverdub() {
@@ -2202,10 +2405,12 @@
     const recorder = overdub.recorder; const chunks = overdub.chunks; const startAt = overdub.startAt; const recorderStartAt = overdub.recorderStartAt;
     const targetTrackId = overdub.targetTrackId; const recordStartSec = overdub.recordStartSec; const recordEndSec = overdub.recordEndSec; const timelineRawStartSec = overdub.timelineRawStartSec;
     const mode = overdub.mode; const overlapMode = overdub.overlapMode;
+    const draftId = overdub.draftId;
     const targetDef = state.trackDefs.find((def) => !def.base && String(def.data?.id) === String(targetTrackId));
     try {
       const stopped = new Promise((resolve) => { if (!recorder || recorder.state === "inactive") resolve(); else recorder.addEventListener("stop", resolve, { once: true }); });
       if (recorder && recorder.state !== "inactive") recorder.stop(); await stopped;
+      await (state.overdub.draftWritePromise || Promise.resolve()).catch(() => {});
       const mimeType = recorder?.mimeType || chunks[0]?.type || "audio/webm"; const blob = new Blob(chunks, { type: mimeType });
       const intendedMs = Math.max(0, (recordEndSec - recordStartSec) * 1000);
       const actualMs = Math.max(0, ((state.context?.currentTime || startAt) - startAt) * 1000);
@@ -2222,27 +2427,24 @@
       let selectedTrackId = targetTrackId;
       if (mode === "punch") {
         if (!trackHasAudio(targetDef.key)) {
-          updated = await state.callbacks.updateExtraTrack?.(state.recording, targetTrackId, { ...basePatch, takeType: "punch" }, { resetMix: true });
+          updated = await appendRecordedClipToTrack(targetDef, { ...basePatch, takeType: "punch" }, recordStartSec, durationMs);
         } else {
           rememberEdit(`${targetDef?.name || "트랙"} 펀치 인`, `punch:${targetDef?.key || targetTrackId}`);
-          const changed = punchAdjustedClips(targetDef.key, recordStartSec, recordStartSec + durationMs / 1000, overlapMode);
-          let recordingBase = state.recording;
-          if (changed) recordingBase = await state.callbacks.saveSettings?.(state.recording, clone(state.settings)) || state.recording;
+          punchAdjustedClips(targetDef.key, recordStartSec, recordStartSec + durationMs / 1000, overlapMode);
           const takeId = globalThis.crypto?.randomUUID?.() || `track-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
           const take = {
             id: takeId,
             name: `${targetDef?.name || "트랙"} · 펀치 ${formatTime(recordStartSec)}`,
             createdAt: Date.now(), sourceTrackId: targetTrackId, takeType: "punch", ...basePatch
           };
-          updated = await state.callbacks.createEmptyTrack?.(recordingBase, take);
+          if (typeof state.callbacks.savePunchTake !== "function") throw new Error("안전 펀치 녹음 저장 기능이 연결되지 않았습니다.");
+          updated = await state.callbacks.savePunchTake(state.recording, take, clone(state.settings));
           selectedTrackId = takeId;
         }
       } else {
         const targetHasAudio = trackHasAudio(targetDef.key);
         const actualEndSec = recordStartSec + durationMs / 1000;
-        if (!targetHasAudio) {
-          updated = await state.callbacks.updateExtraTrack?.(state.recording, targetTrackId, basePatch, { resetMix: true });
-        } else if (!trackIntervalOverlaps(targetDef.key, recordStartSec, actualEndSec)) {
+        if (!targetHasAudio || !trackIntervalOverlaps(targetDef.key, recordStartSec, actualEndSec)) {
           updated = await appendRecordedClipToTrack(targetDef, basePatch, recordStartSec, durationMs);
           selectedTrackId = targetTrackId;
         } else {
@@ -2253,6 +2455,9 @@
       }
       const trackName = targetDef?.name || "추가 트랙";
       const manualOverlap = mode === "manual" && selectedTrackId !== targetTrackId;
+      if (draftId && state.callbacks.completeRecordingDraft) {
+        await state.callbacks.completeRecordingDraft(draftId).catch((error) => console.warn("완료된 녹음 임시 저장 정리 실패", error));
+      }
       cleanupOverdub(); updateMediaSession("none");
       if (updated) { await loadRecording(updated); selectTrack(`extra:${selectedTrackId}`, { scroll: true }); }
       setStatus(mode === "punch"
@@ -2265,7 +2470,11 @@
         : manualOverlap
           ? "겹친 구간은 기존 트랙을 교체하지 않고 새 테이크로 분리했습니다."
           : "기존 클립은 유지하고 같은 트랙의 빈 구간에 새 녹음 클립을 추가했습니다.";
-    } catch (error) { cleanupOverdub(); updateMediaSession("none"); setStatus(`선택 트랙 녹음을 저장하지 못했습니다: ${error.message}`, "error"); }
+    } catch (error) {
+      cleanupOverdub(); updateMediaSession("none");
+      await refreshPendingDraft();
+      setStatus(`선택 트랙 녹음을 저장하지 못했습니다: ${error.message} 임시 저장된 녹음은 복구 버튼으로 확인할 수 있습니다.`, "error");
+    }
   }
 
   function bindClipInspector() {
@@ -2319,6 +2528,13 @@
     $("mixerImportMr")?.addEventListener("click", () => $("mixerMrImportInput")?.click());
     $("mixerMrImportInput")?.addEventListener("change", (event) => importMrFile(event.target.files?.[0]));
     $("mixerRecovery")?.addEventListener("click", recoverLatestEdit);
+    $("mixerPersistStorage")?.addEventListener("click", () => refreshStorageSafety({ request: true }));
+    $("mixerCheckpoint")?.addEventListener("click", createSafetyCheckpoint);
+    $("mixerExportSessionBackup")?.addEventListener("click", exportSessionBackup);
+    $("mixerImportSessionBackup")?.addEventListener("click", () => $("mixerImportSessionBackupInput")?.click());
+    $("mixerImportSessionBackupInput")?.addEventListener("change", (event) => importSessionBackup(event.target.files?.[0]));
+    $("mixerRecoverDraft")?.addEventListener("click", recoverPendingDraft);
+    $("mixerDiscardDraft")?.addEventListener("click", discardPendingDraft);
     $("mixerRenameSession")?.addEventListener("click", renameCurrentSession);
     $("mixerDeleteSession")?.addEventListener("click", deleteCurrentSession);
     $("mixerPlay")?.addEventListener("click", toggle); $("mixerStop")?.addEventListener("click", () => stop()); $("mixerCompare")?.addEventListener("click", toggleCompare); $("mixerReset")?.addEventListener("click", resetSettings);
@@ -2349,6 +2565,9 @@
       else if (["Delete", "Backspace"].includes(event.key) && getSelectedClip()) { deleteSelectedClip(); event.preventDefault(); }
     });
     document.addEventListener("visibilitychange", () => {
+      if (document.hidden && state.overdub.active) {
+        try { state.overdub.recorder?.requestData?.(); } catch {}
+      }
       if (!document.hidden) {
         if (state.context?.state === "suspended" && (state.playing || state.overdub.active)) state.context.resume?.().catch?.(() => {});
         if (state.overdub.active) {
@@ -2363,6 +2582,11 @@
         updateTimeUi();
       }
     });
+    window.addEventListener("pagehide", () => {
+      if (state.overdub.active) {
+        try { state.overdub.recorder?.requestData?.(); } catch {}
+      }
+    });
     window.addEventListener("resize", () => { updateTimeline(); const viewport = $("mixerTimelineViewport"); if (viewport) applyTimelineHeight(viewport.getBoundingClientRect().height); applyTimelineScale(); });
     window.addEventListener("beforeunload", (event) => {
       if (hasUnsavedMixerWork() || state.overdub.active || state.exporting) { event.preventDefault(); event.returnValue = ""; }
@@ -2370,7 +2594,7 @@
       if (state.overdub.active) { try { state.overdub.recorder?.stop(); } catch {} cleanupOverdub(); }
     });
     bindMediaSession();
-    state.initialized = true; refresh(); renderControls(); updateAvailability(); updateRecordModeUi(); setStatus("MR을 가져오거나 기존 녹음 세션을 선택해 주세요.", "idle");
+    state.initialized = true; refresh(); renderControls(); updateAvailability(); updateRecordModeUi(); refreshStorageSafety(); refreshPendingDraft(); setStatus("MR을 가져오거나 기존 녹음 세션을 선택해 주세요.", "idle");
   }
 
   function isPlaying() { return state.playing; }
