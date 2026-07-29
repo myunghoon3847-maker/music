@@ -2691,8 +2691,9 @@ function renderRecordings() {
     const title = document.createElement("strong");
     title.textContent = recording.name || "보컬 녹음";
     titleLine.appendChild(title);
+    const visibleExtraTracks = (Array.isArray(recording.extraTracks) ? recording.extraTracks : []).filter((track) => !track?.sourceOnly);
     const storedTrackCount = [recording.vocalBlob, recording.mrBlob].filter((blob) => blob instanceof Blob).length
-      + (Array.isArray(recording.extraTracks) ? recording.extraTracks.length : 0);
+      + visibleExtraTracks.length;
     if (storedTrackCount > 0) {
       const tag = document.createElement("span");
       tag.className = "recording-mr-tag is-tracks";
@@ -2725,12 +2726,12 @@ function renderRecordings() {
     const player = createRecordingPlayer(recording, objectUrl);
 
     let trackPanel = null;
-    if (recording.vocalBlob || recording.mrBlob || (Array.isArray(recording.extraTracks) && recording.extraTracks.length)) {
+    if (recording.vocalBlob || recording.mrBlob || visibleExtraTracks.length) {
       trackPanel = document.createElement("details");
       trackPanel.className = "recording-track-panel";
       const summary = document.createElement("summary");
       const trackCount = [recording.vocalBlob, recording.mrBlob].filter((blob) => blob instanceof Blob).length
-        + (Array.isArray(recording.extraTracks) ? recording.extraTracks.length : 0);
+        + visibleExtraTracks.length;
       summary.textContent = `분리 트랙 ${trackCount}개`;
       trackPanel.appendChild(summary);
 
@@ -2770,7 +2771,7 @@ function renderRecordings() {
 
       addTrackRow("보컬 트랙", "마이크 원본", recording.vocalBlob, recording.vocalMimeType, `${recording.name}-보컬`);
       addTrackRow("MR 트랙", recording.mrName || "원본 반주", recording.mrBlob, recording.mrMimeType, `${recording.name}-MR`);
-      (Array.isArray(recording.extraTracks) ? recording.extraTracks : []).forEach((track, index) => {
+      visibleExtraTracks.forEach((track, index) => {
         addTrackRow(track.name || `추가 트랙 ${index + 1}`, "믹서에서 추가 녹음", track.blob, track.mimeType, `${recording.name}-${track.name || `추가트랙-${index + 1}`}`);
       });
 
@@ -2790,7 +2791,7 @@ function renderRecordings() {
     actions.className = "recording-item-actions";
 
     let openMixerButton = null;
-    if (recording.vocalBlob || recording.mrBlob || (Array.isArray(recording.extraTracks) && recording.extraTracks.length)) {
+    if (recording.vocalBlob || recording.mrBlob || visibleExtraTracks.length) {
       openMixerButton = document.createElement("button");
       openMixerButton.type = "button";
       openMixerButton.className = "recording-small-btn is-mixer";

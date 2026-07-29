@@ -14,7 +14,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=1961" />
+  <link rel="stylesheet" href="styles.css?v=1962" />
 </head>
 <body>
   <div class="app-shell">
@@ -505,7 +505,7 @@
               </div>
             </div>
             <div class="mixer-clip-toolbar" aria-label="클립 편집 도구">
-              <button id="mixerSplitClip" class="secondary-btn mixer-control" type="button" disabled>분할 <kbd>S</kbd></button>
+              <button id="mixerSplitClip" class="secondary-btn mixer-control" type="button" disabled aria-keyshortcuts="K" title="선택 클립 분할 · K">분할 <kbd>K</kbd></button>
               <button id="mixerMuteClip" class="secondary-btn mixer-icon-tool mixer-control" type="button" disabled aria-pressed="false" aria-label="선택 클립 음소거" title="선택 클립 음소거"><span aria-hidden="true">🔇</span><span class="sr-only">클립 음소거</span></button>
               <button id="mixerDeleteClip" class="secondary-btn is-danger mixer-control" type="button" disabled>클립 삭제</button>
               <span class="mixer-tool-divider" aria-hidden="true"></span>
@@ -523,7 +523,7 @@
               </div>
             </div>
             <button id="mixerTimelineResizeHandle" class="mixer-timeline-resize-handle" type="button" aria-label="타임라인 높이 조절" title="위아래로 드래그해 타임라인 높이 조절"><span aria-hidden="true"></span></button>
-            <p class="mixer-timeline-help">트랙 왼쪽의 M·S·▶·● 버튼으로 화면을 내리지 않고 바로 조작합니다. Ctrl+휠은 가로·세로 비례 확대, Shift+휠은 좌우 이동입니다.</p>
+            <p class="mixer-timeline-help">선택 트랙 단축키: M 음소거 · S 솔로 · P 트랙만 재생 · R 녹음 · K 클립 분할. 클립은 위아래로 드래그해 다른 트랙으로 옮길 수 있습니다.</p>
             <div class="mixer-clip-inspector" aria-label="선택한 클립 설정">
               <div class="mixer-clip-inspector-title"><strong>선택한 클립</strong><span id="mixerClipInfo">타임라인에서 클립을 선택해 주세요.</span></div>
               <div class="mixer-clip-inspector-grid">
@@ -544,10 +544,10 @@
                 <strong id="mixerQuickTrackName">트랙을 선택해 주세요</strong>
               </div>
               <div class="mixer-quick-track-actions">
-                <button id="mixerQuickPreview" type="button" disabled aria-label="선택 트랙만 재생" title="선택 트랙만 재생">▶</button>
-                <button id="mixerQuickMute" type="button" disabled aria-pressed="false" title="트랙 음소거">M</button>
-                <button id="mixerQuickSolo" type="button" disabled aria-pressed="false" title="트랙 솔로">S</button>
-                <button id="mixerQuickRecord" class="is-record" type="button" disabled title="선택한 추가 트랙에 녹음">●</button>
+                <button id="mixerQuickPreview" type="button" disabled aria-keyshortcuts="P" aria-label="선택 트랙만 재생" title="선택 트랙만 재생 · P">▶</button>
+                <button id="mixerQuickMute" type="button" disabled aria-keyshortcuts="M" aria-pressed="false" title="트랙 음소거 · M">M</button>
+                <button id="mixerQuickSolo" type="button" disabled aria-keyshortcuts="S" aria-pressed="false" title="트랙 솔로 · S">S</button>
+                <button id="mixerQuickRecord" class="is-record" type="button" disabled aria-keyshortcuts="R" title="선택한 추가 트랙에 녹음 · R">●</button>
               </div>
             </div>
             <div class="mixer-quick-track-controls">
@@ -826,7 +826,7 @@
           <span id="transportStatus">대기 중</span>
         </div>
       </div>
-      <div class="transport-shortcuts" aria-label="키보드 단축키">Space 재생 · R 녹음 · Esc 정지</div>
+      <div class="transport-shortcuts" aria-label="키보드 단축키">Space 전체 재생 · M 음소거 · S 솔로 · P 트랙 재생 · R 녹음 · K 분할</div>
       <div class="transport-actions">
         <button id="transportPlay" type="button" aria-keyshortcuts="Space" aria-label="재생" title="재생 · Space">▶</button>
         <button id="transportStop" type="button" aria-keyshortcuts="Escape" aria-label="정지" title="정지 · Esc">■</button>
@@ -835,7 +835,7 @@
     </section>
 
     <footer>
-      <p>안정화 · 선택 트랙 빠른 조작 · v1.9.6.1</p>
+      <p>트랙 단축키 · 빈 구간 추가 녹음 · 클립 트랙 이동 · v1.9.6.2</p>
     </footer>
   </div>
 
@@ -879,13 +879,13 @@
     </section>
   </div>
 
-  <script src="core/projects.js?v=1961" defer></script>
-  <script src="core/transport.js?v=1961" defer></script>
-  <script src="core/timeline.js?v=1961" defer></script>
-  <script src="core/edit-history.js?v=1961" defer></script>
-  <script src="core/waveform.js?v=1961" defer></script>
-  <script src="core/mix-renderer.js?v=1961" defer></script>
-  <script src="core/mixer.js?v=1961" defer></script>
-  <script src="app.js?v=1961" defer></script>
+  <script src="core/projects.js?v=1962" defer></script>
+  <script src="core/transport.js?v=1962" defer></script>
+  <script src="core/timeline.js?v=1962" defer></script>
+  <script src="core/edit-history.js?v=1962" defer></script>
+  <script src="core/waveform.js?v=1962" defer></script>
+  <script src="core/mix-renderer.js?v=1962" defer></script>
+  <script src="core/mixer.js?v=1962" defer></script>
+  <script src="app.js?v=1962" defer></script>
 </body>
 </html>

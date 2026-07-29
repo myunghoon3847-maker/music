@@ -2,7 +2,7 @@
   "id": "./",
   "name": "훈뮤직툴 Studio - 음악 작업실",
   "short_name": "훈뮤직툴",
-  "description": "펀치 인 녹음, 백그라운드 재생, 고정 트랙 컨트롤, 클립 편집과 WAV 믹스 내보내기를 제공하는 개인용 음악 제작 도구",
+  "description": "트랙 단축키, 빈 구간 추가 녹음, 클립 트랙 이동, 펀치 인 녹음과 WAV 믹스 내보내기를 제공하는 개인용 음악 제작 도구",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
