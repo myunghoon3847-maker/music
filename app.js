@@ -3583,73 +3583,101 @@ function setupProjects() {
   });
 }
 
+const mixerRecordingWriteQueues = new Map();
+
+function enqueueMixerRecordingWrite(recordingId, task) {
+  const key = String(recordingId || "");
+  const previous = mixerRecordingWriteQueues.get(key) || Promise.resolve();
+  const next = previous.catch(() => {}).then(task);
+  mixerRecordingWriteQueues.set(key, next);
+  return next.finally(() => {
+    if (mixerRecordingWriteQueues.get(key) === next) mixerRecordingWriteQueues.delete(key);
+  });
+}
+
 async function saveMixerSettings(recording, mixSettings) {
-  const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
-  const updated = { ...latest, mixSettings, updatedAt: Date.now() };
-  if (!recording.volatile) await putStoredRecording(updated);
-  state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
-  return updated;
+  return enqueueMixerRecordingWrite(recording.id, async () => {
+    const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+    const updated = { ...latest, mixSettings, updatedAt: Date.now() };
+    if (!recording.volatile) await putStoredRecording(updated);
+    state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+    return updated;
+  });
 }
 
 async function createMixerEmptyTrack(recording, track) {
-  const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
-  const extraTracks = [...(Array.isArray(latest.extraTracks) ? latest.extraTracks : []), track];
-  const updated = {
-    ...latest,
-    extraTracks,
-    trackVersion: Math.max(4, Number(latest.trackVersion) || 0),
-    updatedAt: Date.now()
-  };
-  if (!recording.volatile) await putStoredRecording(updated);
-  state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
-  window.HoonProjects?.touch?.(updated.projectId);
-  renderProjectUi();
-  renderRecordings();
-  return updated;
+  return enqueueMixerRecordingWrite(recording.id, async () => {
+    const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+    const existing = Array.isArray(latest.extraTracks) ? latest.extraTracks : [];
+    const extraTracks = existing.some((entry) => String(entry.id) === String(track.id)) ? existing : [...existing, track];
+    const updated = {
+      ...latest,
+      extraTracks,
+      trackVersion: Math.max(4, Number(latest.trackVersion) || 0),
+      updatedAt: Date.now()
+    };
+    if (!recording.volatile) await putStoredRecording(updated);
+    state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+    window.HoonProjects?.touch?.(updated.projectId);
+    renderProjectUi();
+    renderRecordings();
+    return updated;
+  });
 }
 
 async function updateMixerExtraTrack(recording, trackId, patch, options = {}) {
-  const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
-  const extraTracks = (Array.isArray(latest.extraTracks) ? latest.extraTracks : []).map((track) =>
-    String(track.id) === String(trackId) ? { ...track, ...patch, id: track.id, updatedAt: Date.now() } : track
-  );
-  let mixSettings = latest.mixSettings ? { ...latest.mixSettings } : latest.mixSettings;
-  if (options.resetMix && mixSettings) {
-    mixSettings = { ...mixSettings };
-    delete mixSettings[`extra:${trackId}`];
-  }
-  const updated = {
-    ...latest,
-    extraTracks,
-    mixSettings,
-    trackVersion: Math.max(4, Number(latest.trackVersion) || 0),
-    updatedAt: Date.now()
-  };
-  if (!recording.volatile) await putStoredRecording(updated);
-  state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
-  window.HoonProjects?.touch?.(updated.projectId);
-  renderProjectUi();
-  renderRecordings();
-  return updated;
+  return enqueueMixerRecordingWrite(recording.id, async () => {
+    const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+    const extraTracks = (Array.isArray(latest.extraTracks) ? latest.extraTracks : []).map((track) =>
+      String(track.id) === String(trackId) ? { ...track, ...patch, id: track.id, updatedAt: Date.now() } : track
+    );
+    let mixSettings = latest.mixSettings ? { ...latest.mixSettings } : latest.mixSettings;
+    if (options.resetMix && mixSettings) {
+      mixSettings = { ...mixSettings };
+      delete mixSettings[`extra:${trackId}`];
+    }
+    const updated = {
+      ...latest,
+      extraTracks,
+      mixSettings,
+      trackVersion: Math.max(4, Number(latest.trackVersion) || 0),
+      updatedAt: Date.now()
+    };
+    if (!recording.volatile) await putStoredRecording(updated);
+    state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+    window.HoonProjects?.touch?.(updated.projectId);
+    renderProjectUi();
+    renderRecordings();
+    return updated;
+  });
 }
 
 async function removeMixerExtraTrack(recording, trackId) {
-  const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
-  const extraTracks = (Array.isArray(latest.extraTracks) ? latest.extraTracks : []).filter((track) => String(track.id) !== String(trackId));
-  const updated = { ...latest, extraTracks, updatedAt: Date.now() };
-  if (!recording.volatile) await putStoredRecording(updated);
-  state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
-  renderRecordings();
-  return updated;
+  return enqueueMixerRecordingWrite(recording.id, async () => {
+    const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+    const extraTracks = (Array.isArray(latest.extraTracks) ? latest.extraTracks : []).filter((track) => String(track.id) !== String(trackId));
+    let mixSettings = latest.mixSettings ? { ...latest.mixSettings } : latest.mixSettings;
+    if (mixSettings) {
+      mixSettings = { ...mixSettings };
+      delete mixSettings[`extra:${trackId}`];
+    }
+    const updated = { ...latest, extraTracks, mixSettings, updatedAt: Date.now() };
+    if (!recording.volatile) await putStoredRecording(updated);
+    state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+    renderRecordings();
+    return updated;
+  });
 }
 
 async function recordMixerExport(recording, exportInfo) {
   try {
-    const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
-    const history = [...(Array.isArray(latest.exportHistory) ? latest.exportHistory : []), exportInfo].slice(-10);
-    const updated = { ...latest, exportHistory: history, lastExport: exportInfo, updatedAt: Date.now() };
-    if (!recording.volatile) await putStoredRecording(updated);
-    state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+    await enqueueMixerRecordingWrite(recording.id, async () => {
+      const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+      const history = [...(Array.isArray(latest.exportHistory) ? latest.exportHistory : []), exportInfo].slice(-10);
+      const updated = { ...latest, exportHistory: history, lastExport: exportInfo, updatedAt: Date.now() };
+      if (!recording.volatile) await putStoredRecording(updated);
+      state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+    });
   } catch (error) {
     console.warn("믹스 내보내기 기록 저장 실패", error);
   }

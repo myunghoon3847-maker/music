@@ -14,7 +14,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=1960" />
+  <link rel="stylesheet" href="styles.css?v=1961" />
 </head>
 <body>
   <div class="app-shell">
@@ -447,6 +447,7 @@
             </div>
             <div class="mixer-heading-status">
               <span id="mixerSaveState" class="mixer-save-state" data-state="saved">저장됨</span>
+              <button id="mixerSaveRetry" class="mixer-save-retry" type="button" hidden>다시 저장</button>
               <span id="mixerStatusBadge" class="mixer-status-badge" data-mode="idle">준비</span>
             </div>
           </div>
@@ -536,6 +537,26 @@
             </div>
           </section>
 
+          <section id="mixerQuickTrackInspector" class="mixer-quick-track-inspector" aria-label="선택한 트랙 빠른 조작">
+            <div class="mixer-quick-track-heading">
+              <div>
+                <span class="mixer-track-kicker">SELECTED TRACK</span>
+                <strong id="mixerQuickTrackName">트랙을 선택해 주세요</strong>
+              </div>
+              <div class="mixer-quick-track-actions">
+                <button id="mixerQuickPreview" type="button" disabled aria-label="선택 트랙만 재생" title="선택 트랙만 재생">▶</button>
+                <button id="mixerQuickMute" type="button" disabled aria-pressed="false" title="트랙 음소거">M</button>
+                <button id="mixerQuickSolo" type="button" disabled aria-pressed="false" title="트랙 솔로">S</button>
+                <button id="mixerQuickRecord" class="is-record" type="button" disabled title="선택한 추가 트랙에 녹음">●</button>
+              </div>
+            </div>
+            <div class="mixer-quick-track-controls">
+              <label><span>음량 <output id="mixerQuickVolumeValue">100%</output></span><input id="mixerQuickVolume" type="range" min="0" max="150" step="1" value="100" disabled /></label>
+              <label><span>팬 <output id="mixerQuickPanValue">C</output></span><input id="mixerQuickPan" type="range" min="-100" max="100" step="1" value="0" disabled /></label>
+              <label><span>위치 <output id="mixerQuickOffsetValue">0ms</output></span><input id="mixerQuickOffset" type="range" min="-1000" max="1000" step="10" value="0" disabled /></label>
+            </div>
+          </section>
+
           <div class="mixer-track-quickbar" aria-label="트랙 추가 및 녹음">
             <button id="mixerAddTrack" class="mixer-add-track-btn" type="button" disabled aria-label="빈 트랙 추가" title="빈 트랙 추가">+</button>
             <div class="mixer-track-quick-status">
@@ -560,7 +581,9 @@
             <div class="mixer-overdub-level" aria-label="추가 녹음 입력 레벨"><span id="mixerOverdubLevel"></span></div>
           </div>
 
-          <div class="mixer-track-grid">
+          <details id="mixerDetailedTracks" class="mixer-detailed-tracks">
+            <summary><span>세부 트랙 설정</span><small>자르기 · 페이드 · 숫자 정밀 조정</small></summary>
+            <div class="mixer-track-grid">
             <article id="mixerMrRow" class="mixer-track-card is-mr is-unavailable">
               <header>
                 <div><span class="mixer-track-kicker">BACKING TRACK</span><strong>MR 트랙</strong></div>
@@ -625,6 +648,7 @@
           </div>
 
           <div id="mixerExtraTrackGrid" class="mixer-extra-track-grid" aria-live="polite"></div>
+          </details>
 
           <section class="mixer-export-panel" aria-labelledby="mixer-export-title">
             <div class="mixer-subheading">
@@ -811,7 +835,7 @@
     </section>
 
     <footer>
-      <p>펀치 인 녹음 · 백그라운드 재생 · v1.9.6</p>
+      <p>안정화 · 선택 트랙 빠른 조작 · v1.9.6.1</p>
     </footer>
   </div>
 
@@ -855,13 +879,13 @@
     </section>
   </div>
 
-  <script src="core/projects.js?v=1960" defer></script>
-  <script src="core/transport.js?v=1960" defer></script>
-  <script src="core/timeline.js?v=1960" defer></script>
-  <script src="core/edit-history.js?v=1960" defer></script>
-  <script src="core/waveform.js?v=1960" defer></script>
-  <script src="core/mix-renderer.js?v=1960" defer></script>
-  <script src="core/mixer.js?v=1960" defer></script>
-  <script src="app.js?v=1960" defer></script>
+  <script src="core/projects.js?v=1961" defer></script>
+  <script src="core/transport.js?v=1961" defer></script>
+  <script src="core/timeline.js?v=1961" defer></script>
+  <script src="core/edit-history.js?v=1961" defer></script>
+  <script src="core/waveform.js?v=1961" defer></script>
+  <script src="core/mix-renderer.js?v=1961" defer></script>
+  <script src="core/mixer.js?v=1961" defer></script>
+  <script src="app.js?v=1961" defer></script>
 </body>
 </html>
