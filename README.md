@@ -1,27 +1,20 @@
-# Lumen AI v1.6.1 — API Stability Fix
+# 훈뮤직툴 v1.9.6 펀치 인 녹음·백그라운드 재생
 
-## 수정 내용
-- `/api/write`가 없거나 HTML 오류 페이지를 반환할 때 원인을 정확히 안내
-- `OPENAI_API_KEY` 누락, 인증, 사용 한도, 모델 오류, 시간 초과 메시지 구분
-- 기본 모델 실패 시 호환 모델로 자동 재시도
-- `/api/health` 배포 상태 확인 엔드포인트 추가
-- API 응답 캐시 방지
-- PWA 캐시 버전 갱신
+## 핵심 변경
 
-## Vercel 환경 변수
-- 필수: `OPENAI_API_KEY`
-- 선택: `OPENAI_MODEL`
+- 반복 구간 또는 직접 지정한 시작·종료 위치의 펀치 인 녹음
+- 원본 트랙을 보존하고 펀치 테이크를 새 트랙으로 저장
+- 기존 클립 유지·겹친 클립 음소거·겹친 구간 교체 선택
+- 다른 탭이나 최소화 상태에서도 믹서 재생 유지
+- Space 전체 재생·일시정지, R 믹서 내부 녹음
+- 전체 트랙 음소거 상태에서도 마이크 녹음 가능
+- 확대 배율과 믹서 높이·트랙 수에 맞춘 트랙 세로 폭 자동 조정
+- Media Session 재생·일시정지·정지 지원 브라우저 대응
 
-환경 변수를 추가하거나 수정한 뒤에는 반드시 Redeploy 하세요.
+## 실행
 
-## 확인 주소
-배포 주소 뒤에 `/api/health`를 붙여 열었을 때 아래와 비슷한 JSON이 나오면 API 배포가 정상입니다.
+`훈뮤직툴 실행.bat`을 실행한 뒤 브라우저에서 사용합니다. 마이크 녹음은 localhost 또는 HTTPS에서 작동합니다.
 
-```json
-{"ok":true,"apiKeyConfigured":true,"model":"automatic"}
-```
+## 검수 권장
 
-
-## v1.6.2 deployment fix
-- Replaced individual function patterns with `api/*.js` to prevent Vercel UNMATCHED_FUNCTION_PATTERN build failures.
-- Both `/api/write` and `/api/health` are automatically detected from the root `api` directory.
+유선 이어폰을 연결하고 10~20초 테스트 프로젝트로 펀치 인 위치, 백그라운드 재생, WAV 결과를 확인하세요. 모바일 운영체제의 강제 절전이나 브라우저 종료까지 앱에서 막을 수는 없습니다.

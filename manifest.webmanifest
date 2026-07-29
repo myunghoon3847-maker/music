@@ -1,13 +1,49 @@
 {
-  "name": "Lumen AI",
-  "short_name": "Lumen AI",
-  "description": "한 줄로 시작하는 AI 글쓰기",
-  "start_url": "/",
+  "id": "./",
+  "name": "훈뮤직툴 Studio - 음악 작업실",
+  "short_name": "훈뮤직툴",
+  "description": "펀치 인 녹음, 백그라운드 재생, 고정 트랙 컨트롤, 클립 편집과 WAV 믹스 내보내기를 제공하는 개인용 음악 제작 도구",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui",
+    "browser"
+  ],
+  "orientation": "any",
   "background_color": "#f4f5fb",
-  "theme_color": "#6c5cff",
+  "theme_color": "#5b5bd6",
+  "lang": "ko-KR",
+  "categories": [
+    "music",
+    "utilities",
+    "productivity"
+  ],
   "icons": [
-    {"src":"/icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
-    {"src":"/icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

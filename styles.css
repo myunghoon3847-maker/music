@@ -3555,10 +3555,11 @@ input, select, textarea { font-size: 16px; }
 
 
 /* =========================================================
-   v1.9.5 FIXED TRACK CONTROLS · CLIP MUTE · PROPORTIONAL ZOOM
+   v1.9.6 PUNCH IN · BACKGROUND PLAYBACK · RESPONSIVE TRACK SCALE
    ========================================================= */
 #mixer .mixer-editor {
   --timeline-zoom: 1;
+  --timeline-lane-scale: 1;
   --track-header-width: 132px;
   --timeline-pad: 12px;
   --timeline-gap: 8px;
@@ -3612,7 +3613,7 @@ input, select, textarea { font-size: 16px; }
   grid-template-columns: var(--track-header-width) minmax(0, 1fr);
   align-items: stretch;
   gap: var(--timeline-gap);
-  min-height: calc(var(--timeline-lane-base) * var(--timeline-zoom));
+  min-height: calc(var(--timeline-lane-base) * var(--timeline-lane-scale));
 }
 .mixer-lane-header {
   position: sticky;
@@ -3682,7 +3683,7 @@ input, select, textarea { font-size: 16px; }
 }
 #mixer .mixer-lane-track {
   height: auto;
-  min-height: calc(var(--timeline-lane-base) * var(--timeline-zoom));
+  min-height: calc(var(--timeline-lane-base) * var(--timeline-lane-scale));
   border: 1px solid rgba(255,255,255,.035);
 }
 #mixer .mixer-timeline-content .mixer-playhead {
@@ -3799,4 +3800,35 @@ body.is-resizing-mixer-timeline { cursor: ns-resize; user-select: none; }
   border: 1px solid #dedfeb;
   border-radius: 12px;
   background: #fbfbfe;
+}
+
+
+/* v1.9.6 punch-in recording and responsive timeline density */
+.mixer-record-options {
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+}
+.mixer-record-options > label[hidden],
+#mixerRecordUseLoop[hidden] { display: none !important; }
+.mixer-record-options select {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 30px 6px 8px;
+  border: 1px solid #dfe1eb;
+  border-radius: 9px;
+  background: #fff;
+  font-size: .64rem;
+}
+#mixer .mixer-editor[data-zoom-density="compact"] .mixer-lane-header { padding-block: 4px; gap: 3px 5px; }
+#mixer .mixer-editor[data-zoom-density="compact"] .mixer-lane-name { font-size: .52rem; }
+#mixer .mixer-editor[data-zoom-density="compact"] .mixer-lane-actions button { width: 20px; height: 20px; min-width: 20px; min-height: 20px; }
+#mixer .mixer-editor[data-zoom-density="large"] .mixer-lane-header { padding: 10px; gap: 7px; }
+#mixer .mixer-editor[data-zoom-density="large"] .mixer-lane-name { font-size: .68rem; }
+#mixer .mixer-editor[data-zoom-density="large"] .mixer-lane-actions button { width: 27px; height: 27px; min-width: 27px; min-height: 27px; font-size: .62rem; }
+#mixer .mixer-editor[data-zoom-density="large"] .mixer-lane-volume { height: 6px; }
+@media (max-width: 899px) {
+  .mixer-record-options { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+}
+@media (max-width: 560px) {
+  .mixer-record-options { grid-template-columns: 1fr; }
+  .mixer-record-options > label:not(.mixer-check) { grid-template-columns: 86px minmax(0, 1fr) auto; }
 }

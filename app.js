@@ -3798,6 +3798,11 @@ async function transportPlayPause() {
 }
 
 function transportRecord() {
+  if (state.currentTab === "mixer") {
+    if (window.HoonMixer?.isRecording?.()) window.HoonMixer?.finishOverdub?.();
+    else window.HoonMixer?.startOverdub?.({ fromTransport: true });
+    return;
+  }
   activateTab("recording");
   if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") stopRecording();
   else startRecording();

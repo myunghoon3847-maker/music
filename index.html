@@ -1,66 +1,867 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#6c5cff">
-<meta name="description" content="한 줄의 요청으로 완성도 높은 글을 만드는 AI 글쓰기 도구">
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="/favicon.ico?v=161">
-<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=161">
-<title>Lumen AI</title>
-<style>
-:root{--bg:#f5f6fb;--card:#fff;--text:#171827;--muted:#6d7185;--line:#e4e6ef;--primary:#6c5cff;--primary-dark:#5547e8;--soft:#efedff;--danger:#cf3c31;--danger-bg:#fff4f3;--success:#17864b;--shadow:0 14px 36px rgba(38,40,65,.08)}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;min-height:100vh;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;color:var(--text);background:radial-gradient(circle at top,#ece9ff 0,#f5f6fb 360px)}button,textarea,select,input{font:inherit}button{cursor:pointer}.hidden{display:none!important}.app{width:min(100%,920px);margin:auto;padding:28px 16px 56px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}.brand{display:flex;align-items:center;gap:12px}.logo{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;color:#fff;font-weight:850;font-size:21px;background:linear-gradient(145deg,#7568ff,#5b4bea);box-shadow:0 9px 24px rgba(108,92,255,.28)}.brand h1{font-size:21px;margin:0 0 2px}.brand p{font-size:13px;color:var(--muted);margin:0}.top-actions{display:flex;gap:8px}.install,.ghost{min-height:40px;padding:0 14px;border:1px solid #d5d0ff;border-radius:12px;background:#fff;color:var(--primary-dark);font-weight:750}.ghost{border-color:var(--line);color:#4d5165}.hero{padding:4px 2px 2px}.hero h2{margin:0;font-size:clamp(25px,5vw,38px);line-height:1.2;letter-spacing:-.03em}.hero p{margin:10px 0 0;color:var(--muted);line-height:1.6}.card{background:rgba(255,255,255,.97);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);padding:20px;margin-top:18px}.section-head,.result-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:13px}.section-title{font-size:16px;font-weight:850;margin:0}.hint,.meta{font-size:12px;color:var(--muted)}.preset-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}.preset-row::-webkit-scrollbar{display:none}.preset{flex:0 0 auto;border:1px solid var(--line);background:#fff;color:#4d5165;min-height:40px;padding:0 15px;border-radius:999px;font-weight:750}.preset.active{color:var(--primary-dark);border-color:#c9c3ff;background:var(--soft)}.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}.control label,.field-label{display:block;font-size:13px;font-weight:800;margin:0 0 8px}.control select{width:100%;height:44px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--text);padding:0 12px;outline:none}.control select:focus,textarea:focus{border-color:#9f95ff;box-shadow:0 0 0 4px rgba(108,92,255,.1)}.textarea-wrap{position:relative}textarea{width:100%;min-height:180px;resize:vertical;border:1px solid var(--line);border-radius:16px;padding:16px 16px 38px;color:var(--text);background:#fff;line-height:1.65;outline:none}.count{position:absolute;right:13px;bottom:11px;color:var(--muted);font-size:12px}.examples,.quick-rewrite{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0 0}.example,.quick{border:0;background:#f1f2f7;color:#55596c;border-radius:10px;padding:8px 10px;font-size:12px}.quick{border:1px solid #dedaf7;background:#faf9ff;color:#574dc0;font-weight:750}.primary{width:100%;min-height:50px;margin-top:14px;border:0;border-radius:14px;color:#fff;background:linear-gradient(135deg,#7568ff,#5b4bea);font-weight:850;font-size:16px;box-shadow:0 8px 20px rgba(108,92,255,.2)}.primary:disabled,.secondary:disabled,.edit-button:disabled,.quick:disabled{opacity:.52;cursor:not-allowed}.status{min-height:20px;margin:10px 2px 0;color:var(--muted);font-size:13px}.result-editor{min-height:270px;white-space:pre-wrap;line-height:1.78;border:1px solid var(--line);border-radius:16px;background:#fcfcff;padding:18px;overflow-wrap:anywhere;resize:vertical}.result-editor.error{color:var(--danger);background:var(--danger-bg);border-color:#ffc8c3}.actions{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:12px}.secondary{min-height:46px;border:1px solid #d9d6f4;border-radius:13px;background:#f7f6ff;color:#4f45bd;font-weight:800}.secondary.danger{color:var(--danger);border-color:#f0c7c3;background:#fff8f7}.edit-area{margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}.edit-row{display:grid;grid-template-columns:1fr auto;gap:9px}.edit-row textarea{min-height:48px;height:48px;resize:none;padding:12px 14px}.edit-button{min-width:96px;border:0;border-radius:13px;color:#fff;background:#292b38;font-weight:800}.new-button{margin-top:10px;background:#fff;color:#4d5165;border:1px solid var(--line);box-shadow:none}.loading-box{min-height:270px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:14px;color:var(--muted);border:1px solid var(--line);border-radius:16px;background:#fcfcff}.spinner{width:35px;height:35px;border:4px solid #e5e2ff;border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.footer{padding:22px 2px 0;text-align:center;color:var(--muted);font-size:12px}.drawer-backdrop{position:fixed;inset:0;background:rgba(20,22,35,.38);z-index:20}.drawer{position:fixed;top:0;right:0;width:min(92vw,420px);height:100vh;background:#fff;z-index:21;box-shadow:-12px 0 36px rgba(30,32,50,.16);display:flex;flex-direction:column}.drawer-head{display:flex;justify-content:space-between;align-items:center;padding:18px;border-bottom:1px solid var(--line)}.drawer-head h2{font-size:18px;margin:0}.history-list{padding:12px;overflow:auto;flex:1}.history-empty{color:var(--muted);text-align:center;padding:54px 14px}.history-item{border:1px solid var(--line);border-radius:15px;padding:13px;margin-bottom:10px;background:#fff}.history-item h3{font-size:14px;margin:0 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.history-item p{font-size:12px;color:var(--muted);margin:0 0 10px}.history-actions{display:flex;gap:7px}.history-actions button{flex:1;min-height:36px;border-radius:10px;border:1px solid var(--line);background:#f8f8fb;font-weight:750;font-size:12px}.drawer-foot{padding:12px 18px 18px;border-top:1px solid var(--line)}
-@media(max-width:620px){.app{padding:18px 12px 42px}.topbar{align-items:flex-start}.top-actions{flex-direction:column}.install,.ghost{font-size:12px;min-height:36px}.hero h2{font-size:28px}.card{padding:16px;border-radius:20px}.controls{grid-template-columns:1fr}.actions{grid-template-columns:1fr 1fr}.edit-row{grid-template-columns:1fr}.edit-button{min-height:46px}.result-editor{min-height:320px}}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#5b5bd6" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="훈뮤직툴" />
+  <meta name="format-detection" content="telephone=no" />
+  <meta name="description" content="코드 진행·보컬 음정 연습·분리 녹음·파형 타임라인 편집·멀티트랙 믹서·WAV 내보내기를 제공하는 개인용 음악 제작 도구" />
+  <title>훈뮤직툴 · Studio</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css?v=1960" />
 </head>
 <body>
-<main class="app">
-<header class="topbar"><div class="brand"><div class="logo" aria-hidden="true">L</div><div><h1>Lumen AI</h1><p>한 줄로 시작하는 AI 글쓰기</p></div></div><div class="top-actions"><button id="historyButton" class="ghost">작성 이력</button><button id="installButton" class="install hidden">앱 설치</button></div></header>
-<section class="hero"><h2>생각만 적으세요.<br>완성된 글은 AI가 만듭니다.</h2><p>목적과 분위기를 선택하면 블로그, 이메일, 마케팅 문구까지 바로 사용할 수 있는 글로 작성합니다.</p></section>
-<section id="inputCard" class="card">
-<div class="section-head"><h3 class="section-title">글쓰기 설정</h3><span class="hint">Ctrl + Enter로 생성</span></div>
-<div class="preset-row" aria-label="글 종류 선택"><button class="preset active" data-preset="자유">자유 작성</button><button class="preset" data-preset="블로그">블로그</button><button class="preset" data-preset="유튜브">유튜브</button><button class="preset" data-preset="마케팅">마케팅</button><button class="preset" data-preset="자기소개서">자기소개서</button><button class="preset" data-preset="이메일">이메일</button></div>
-<div class="controls"><div class="control"><label for="tone">문체</label><select id="tone"><option>자연스럽게</option><option>친근하게</option><option>전문적으로</option><option>설득력 있게</option><option>간결하게</option></select></div><div class="control"><label for="length">분량</label><select id="length"><option value="short">짧게</option><option value="medium" selected>보통</option><option value="long">길게</option></select></div></div>
-<label class="field-label" for="request">글쓰기 요청</label><div class="textarea-wrap"><textarea id="request" maxlength="2000" placeholder="예: 일본어 학습 앱 사용 후기를 네이버 블로그에 올릴 수 있도록 친근하고 자세하게 작성해줘"></textarea><span class="count"><span id="requestCount">0</span>/2000</span></div>
-<div class="examples"><button class="example" data-example="초보자를 위한 일본어 학습 앱 소개 글을 작성해줘">앱 소개</button><button class="example" data-example="회의 일정 변경을 알리는 정중한 업무 이메일을 작성해줘">업무 이메일</button><button class="example" data-example="신제품의 핵심 장점을 강조하는 짧은 홍보 문구를 작성해줘">홍보 문구</button></div>
-<button id="writeButton" class="primary">AI로 글 작성</button><p id="status" class="status" aria-live="polite"></p>
-</section>
-<section id="resultCard" class="card hidden">
-<div class="result-toolbar"><h3 class="section-title">작성 결과</h3><span id="resultMeta" class="meta"></span></div>
-<textarea id="result" class="result-editor" aria-label="작성 결과 편집"></textarea>
-<div class="quick-rewrite" aria-label="빠른 재작성"><button class="quick" data-instruction="더 짧고 핵심적으로 다듬어줘">더 짧게</button><button class="quick" data-instruction="내용을 더 풍부하고 자세하게 확장해줘">더 길게</button><button class="quick" data-instruction="문장을 더 자연스럽고 매끄럽게 다듬어줘">자연스럽게</button><button class="quick" data-instruction="더 전문적이고 신뢰감 있는 문체로 바꿔줘">전문적으로</button><button class="quick" data-instruction="맞춤법과 띄어쓰기, 어색한 표현을 교정해줘">맞춤법 교정</button></div>
-<div class="actions"><button id="copyButton" class="secondary" disabled>복사</button><button id="retryButton" class="secondary" disabled>다시 생성</button><button id="restoreButton" class="secondary" disabled>원본 복원</button><button id="downloadButton" class="secondary" disabled>TXT 저장</button></div>
-<div id="editArea" class="edit-area hidden"><label class="field-label" for="editRequest">AI에게 수정 요청</label><div class="edit-row"><textarea id="editRequest" maxlength="500" placeholder="예: 더 친근하게 바꿔줘"></textarea><button id="editButton" class="edit-button">수정하기</button></div></div>
-<button id="newButton" class="primary new-button">새 글 작성</button>
-</section>
-<footer class="footer">민감한 개인정보는 입력하지 마세요. AI 결과는 사용 전 확인이 필요합니다.</footer>
-</main>
-<div id="drawerBackdrop" class="drawer-backdrop hidden"></div><aside id="historyDrawer" class="drawer hidden" aria-label="작성 이력"><div class="drawer-head"><h2>작성 이력</h2><button id="closeHistory" class="ghost">닫기</button></div><div id="historyList" class="history-list"></div><div class="drawer-foot"><button id="clearHistory" class="secondary danger" style="width:100%">이력 전체 삭제</button></div></aside>
-<script>
-const $=id=>document.getElementById(id);const requestEl=$('request'),requestCountEl=$('requestCount'),writeButton=$('writeButton'),retryButton=$('retryButton'),copyButton=$('copyButton'),downloadButton=$('downloadButton'),restoreButton=$('restoreButton'),resultEl=$('result'),resultMeta=$('resultMeta'),statusEl=$('status'),editArea=$('editArea'),editRequestEl=$('editRequest'),editButton=$('editButton'),newButton=$('newButton'),inputCard=$('inputCard'),resultCard=$('resultCard'),toneEl=$('tone'),lengthEl=$('length'),installButton=$('installButton'),historyButton=$('historyButton'),historyDrawer=$('historyDrawer'),drawerBackdrop=$('drawerBackdrop'),closeHistory=$('closeHistory'),historyList=$('historyList'),clearHistory=$('clearHistory');
-const presetButtons=[...document.querySelectorAll('.preset')],quickButtons=[...document.querySelectorAll('.quick')];let selectedPreset=localStorage.getItem('lumenPreset')||'자유',lastResult='',originalResult='',activeHistoryId=null,installPrompt=null,isLoading=false;const HISTORY_KEY='lumenHistoryV1';
-function getHistory(){try{return JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]')}catch{return[]}}function setHistory(items){localStorage.setItem(HISTORY_KEY,JSON.stringify(items.slice(0,50)))}function makeTitle(request){return(request||'제목 없는 글').replace(/\s+/g,' ').trim().slice(0,42)}
-function updateCount(){requestCountEl.textContent=requestEl.value.length;localStorage.setItem('lumenDraft',requestEl.value)}requestEl.value=localStorage.getItem('lumenDraft')||'';updateCount();requestEl.addEventListener('input',updateCount);
-presetButtons.forEach(b=>{b.classList.toggle('active',b.dataset.preset===selectedPreset);b.addEventListener('click',()=>{selectedPreset=b.dataset.preset;localStorage.setItem('lumenPreset',selectedPreset);presetButtons.forEach(x=>x.classList.toggle('active',x===b));requestEl.focus()})});document.querySelectorAll('.example').forEach(b=>b.addEventListener('click',()=>{requestEl.value=b.dataset.example;updateCount();requestEl.focus()}));
-function showInputScreen(){resultCard.classList.add('hidden');inputCard.classList.remove('hidden');window.scrollTo({top:0,behavior:'smooth'});requestEl.focus()}function showResultScreen(){inputCard.classList.add('hidden');resultCard.classList.remove('hidden');window.scrollTo({top:0,behavior:'smooth'})}
-function setLoading(v){isLoading=v;writeButton.disabled=v;retryButton.disabled=v||!lastResult;editButton.disabled=v;quickButtons.forEach(b=>b.disabled=v||!lastResult)}
-function showLoadingScreen(message){showResultScreen();resultEl.className='loading-box';resultEl.value='';resultEl.placeholder=message;resultEl.disabled=true;resultMeta.textContent='';copyButton.disabled=retryButton.disabled=downloadButton.disabled=restoreButton.disabled=true;editArea.classList.add('hidden')}
-function updateMeta(){const text=resultEl.value;const chars=text.replace(/\s/g,'').length;const words=text.trim()?text.trim().split(/\s+/).length:0;resultMeta.textContent=`약 ${words}단어 · ${chars}자`;lastResult=text}
-function saveHistory(text){const items=getHistory(),now=new Date().toISOString();if(activeHistoryId){const i=items.findIndex(x=>x.id===activeHistoryId);if(i>=0){items[i]={...items[i],text,request:requestEl.value.trim(),preset:selectedPreset,tone:toneEl.value,length:lengthEl.value,updatedAt:now};setHistory(items);return}}const item={id:'h_'+Date.now(),title:makeTitle(requestEl.value),request:requestEl.value.trim(),text,preset:selectedPreset,tone:toneEl.value,length:lengthEl.value,createdAt:now,updatedAt:now};activeHistoryId=item.id;setHistory([item,...items])}
-function showResult(text,isError=false,{save=true,asOriginal=true}={}){resultEl.disabled=false;resultEl.className='result-editor';resultEl.value=text;if(isError){resultEl.classList.add('error');copyButton.disabled=retryButton.disabled=downloadButton.disabled=restoreButton.disabled=true;editArea.classList.add('hidden');resultMeta.textContent='';return}lastResult=text;if(asOriginal)originalResult=text;updateMeta();copyButton.disabled=retryButton.disabled=downloadButton.disabled=restoreButton.disabled=false;editArea.classList.remove('hidden');if(save)saveHistory(text)}
-resultEl.addEventListener('input',()=>{if(isLoading)return;updateMeta();if(activeHistoryId){clearTimeout(resultEl._saveTimer);resultEl._saveTimer=setTimeout(()=>saveHistory(resultEl.value),500)}});
-async function callApi(payload){if(!navigator.onLine)throw new Error('인터넷 연결을 확인해 주세요.');let r;try{r=await fetch('/api/write',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})}catch{throw new Error('서버에 연결하지 못했습니다. 배포 상태와 인터넷 연결을 확인해 주세요.')}const contentType=r.headers.get('content-type')||'';let d={};if(contentType.includes('application/json'))d=await r.json().catch(()=>({}));else{const raw=await r.text().catch(()=> '');if(r.status===404)throw new Error('AI API 경로를 찾지 못했습니다. Vercel에 프로젝트 전체 폴더를 다시 배포해 주세요.');throw new Error(raw&&raw.length<180?raw:'서버가 올바르지 않은 응답을 보냈습니다.')}if(!r.ok)throw new Error(d.error||`글 작성에 실패했습니다. (오류 ${r.status})`);if(!d.text)throw new Error('AI 결과가 비어 있습니다. 다시 시도해 주세요.');return d.text}
-async function generate(){const request=requestEl.value.trim();if(request.length<4){requestEl.focus();statusEl.textContent='요청 내용을 4자 이상 입력해 주세요.';return}statusEl.textContent='';activeHistoryId=null;setLoading(true);showLoadingScreen('AI가 글을 작성하고 있습니다.');try{showResult(await callApi({mode:'generate',preset:selectedPreset,tone:toneEl.value,length:lengthEl.value,request}))}catch(e){showResult(e.message,true)}finally{setLoading(false)}}
-async function revise(instructionOverride=''){const instruction=(instructionOverride||editRequestEl.value).trim();if(!lastResult||!instruction)return;setLoading(true);showLoadingScreen('요청에 맞게 글을 수정하고 있습니다.');try{showResult(await callApi({mode:'revise',preset:selectedPreset,tone:toneEl.value,length:lengthEl.value,request:requestEl.value.trim(),previousText:lastResult,instruction}),false,{save:true,asOriginal:false});editRequestEl.value=''}catch(e){showResult(e.message,true)}finally{setLoading(false)}}
-writeButton.addEventListener('click',generate);retryButton.addEventListener('click',generate);editButton.addEventListener('click',()=>revise());quickButtons.forEach(b=>b.addEventListener('click',()=>revise(b.dataset.instruction)));document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();resultCard.classList.contains('hidden')?generate():revise()}});
-newButton.addEventListener('click',()=>{lastResult='';originalResult='';activeHistoryId=null;resultEl.className='result-editor';resultEl.value='';resultMeta.textContent='';editRequestEl.value='';copyButton.disabled=retryButton.disabled=downloadButton.disabled=restoreButton.disabled=true;editArea.classList.add('hidden');showInputScreen()});
-restoreButton.addEventListener('click',()=>{if(!originalResult)return;resultEl.value=originalResult;updateMeta();saveHistory(resultEl.value)});copyButton.addEventListener('click',async()=>{if(!lastResult)return;try{await navigator.clipboard.writeText(lastResult)}catch{resultEl.select();document.execCommand('copy')}copyButton.textContent='복사 완료';setTimeout(()=>copyButton.textContent='복사',1400)});downloadButton.addEventListener('click',()=>{if(!lastResult)return;const blob=new Blob([lastResult],{type:'text/plain;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='lumen-ai-result.txt';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)});
-function renderHistory(){const items=getHistory();historyList.innerHTML='';if(!items.length){historyList.innerHTML='<div class="history-empty">아직 저장된 작성 결과가 없습니다.</div>';return}items.forEach(item=>{const el=document.createElement('article');el.className='history-item';const d=new Date(item.updatedAt||item.createdAt);el.innerHTML=`<h3></h3><p>${item.preset} · ${d.toLocaleString('ko-KR')}</p><div class="history-actions"><button data-open>열기</button><button data-delete>삭제</button></div>`;el.querySelector('h3').textContent=item.title||makeTitle(item.request);el.querySelector('[data-open]').addEventListener('click',()=>openHistoryItem(item));el.querySelector('[data-delete]').addEventListener('click',()=>{setHistory(getHistory().filter(x=>x.id!==item.id));renderHistory()});historyList.appendChild(el)})}
-function openHistory(){renderHistory();historyDrawer.classList.remove('hidden');drawerBackdrop.classList.remove('hidden')}function closeHistoryDrawer(){historyDrawer.classList.add('hidden');drawerBackdrop.classList.add('hidden')}function openHistoryItem(item){selectedPreset=item.preset||'자유';presetButtons.forEach(b=>b.classList.toggle('active',b.dataset.preset===selectedPreset));toneEl.value=item.tone||'자연스럽게';lengthEl.value=item.length||'medium';requestEl.value=item.request||'';updateCount();activeHistoryId=item.id;originalResult=item.text||'';showResult(item.text||'',false,{save:false,asOriginal:false});showResultScreen();closeHistoryDrawer()}
-historyButton.addEventListener('click',openHistory);closeHistory.addEventListener('click',closeHistoryDrawer);drawerBackdrop.addEventListener('click',closeHistoryDrawer);clearHistory.addEventListener('click',()=>{if(confirm('저장된 작성 이력을 모두 삭제할까요?')){setHistory([]);renderHistory();activeHistoryId=null}});
-window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;installButton.classList.remove('hidden')});installButton.addEventListener('click',async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;installButton.classList.add('hidden')});window.addEventListener('appinstalled',()=>installButton.classList.add('hidden'));if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
-</script>
+  <div class="app-shell">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">HOON MUSIC TOOL</p>
+        <h1>훈뮤직툴</h1>
+      </div>
+      <div class="header-actions">
+        <button id="shareBtn" class="icon-btn header-btn" type="button" aria-label="훈뮤직툴 주소 공유">공유</button>
+        <button id="installBtn" class="icon-btn install-btn" type="button" aria-label="앱 설치">설치</button>
+      </div>
+      <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="사이드바 접기" aria-expanded="true">
+        <span aria-hidden="true">⇤</span><b>메뉴 접기</b>
+      </button>
+    </header>
+
+    <aside id="mobileReadyBanner" class="mobile-ready-banner" hidden>
+      <div>
+        <strong>모바일 설치 준비 완료</strong>
+        <span>브라우저 메뉴 또는 설치 버튼으로 홈 화면에 추가할 수 있습니다.</span>
+      </div>
+      <button id="mobileGuideBtn" type="button">설치 방법</button>
+    </aside>
+
+    <nav class="tabs" aria-label="주요 기능">
+      <button class="tab is-active" data-tab="chords" aria-selected="true">코드</button>
+      <button class="tab" data-tab="vocalTune" aria-selected="false">보컬튠</button>
+      <button class="tab" data-tab="recording" aria-selected="false">녹음</button>
+      <button class="tab" data-tab="mixer" aria-selected="false">믹서</button>
+      <button class="tab" data-tab="metronome" aria-selected="false">메트로놈</button>
+      <button class="tab" data-tab="tuner" aria-selected="false">튜너</button>
+    </nav>
+
+    <main>
+      <section id="metronome" class="panel" aria-labelledby="metronome-title">
+        <div class="card tempo-card">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">TEMPO</p>
+              <h2 id="metronome-title">메트로놈</h2>
+            </div>
+            <span id="tempoLabel" class="tempo-label">보통 빠르기</span>
+          </div>
+
+          <div class="bpm-display" aria-live="polite">
+            <button id="bpmMinus" class="step-btn" aria-label="BPM 1 낮추기">−</button>
+            <div>
+              <strong id="bpmValue">100</strong>
+              <span>BPM</span>
+            </div>
+            <button id="bpmPlus" class="step-btn" aria-label="BPM 1 높이기">＋</button>
+          </div>
+
+          <input id="bpmSlider" class="range" type="range" min="30" max="240" value="100" aria-label="BPM" />
+
+          <div class="beat-indicators" id="beatIndicators" aria-label="박자 표시"></div>
+
+          <div class="control-grid">
+            <label>
+              <span>박자</span>
+              <select id="timeSignature">
+                <option value="2">2/4</option>
+                <option value="3">3/4</option>
+                <option value="4" selected>4/4</option>
+                <option value="6">6/8</option>
+              </select>
+            </label>
+            <label>
+              <span>볼륨</span>
+              <input id="metronomeVolume" class="range compact" type="range" min="0" max="100" value="70" />
+            </label>
+          </div>
+
+          <div class="action-row">
+            <button id="tapTempo" class="secondary-btn">TAP</button>
+            <button id="toggleMetronome" class="primary-btn">시작</button>
+          </div>
+          <p class="helper">TAP 버튼을 일정한 간격으로 4번 이상 누르면 BPM이 계산됩니다.</p>
+        </div>
+      </section>
+
+
+      <section id="tuner" class="panel" aria-labelledby="tuner-title">
+        <div class="card tuner-card">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">TUNER</p>
+              <h2 id="tuner-title">음정 튜너</h2>
+            </div>
+            <span id="tunerStatusBadge" class="tempo-label tuner-badge">대기 중</span>
+          </div>
+
+          <div class="tuner-settings">
+            <label>
+              <span>튜닝 모드</span>
+              <select id="tuningMode">
+                <option value="chromatic">크로매틱 · 모든 음</option>
+                <option value="guitarStandard">기타 · 표준 E A D G B E</option>
+                <option value="guitarDropD">기타 · Drop D</option>
+                <option value="guitarHalfStepDown">기타 · 반음 낮춤</option>
+                <option value="guitarWholeStepDown">기타 · 온음 낮춤</option>
+                <option value="ukuleleStandard">우쿨렐레 · 표준 High G</option>
+                <option value="ukuleleLowG">우쿨렐레 · Low G</option>
+              </select>
+            </label>
+            <label>
+              <span>기준음 A4</span>
+              <div class="reference-control">
+                <button id="a4Minus" class="mini-step" type="button" aria-label="기준음 1Hz 낮추기">−</button>
+                <input id="a4Reference" type="number" min="430" max="450" value="440" inputmode="numeric" aria-label="A4 기준 주파수" />
+                <button id="a4Plus" class="mini-step" type="button" aria-label="기준음 1Hz 높이기">＋</button>
+              </div>
+            </label>
+          </div>
+
+          <div id="stringTargetPanel" class="string-target-panel">
+            <div class="string-target-heading">
+              <span>맞출 줄 선택</span>
+              <small id="stringTargetHint">자동으로 가장 가까운 음을 찾습니다.</small>
+            </div>
+            <div id="stringTargetButtons" class="string-target-buttons" role="group" aria-label="맞출 줄 선택"></div>
+          </div>
+
+          <div class="tuner-display" aria-live="polite">
+            <p id="tunerTarget" class="tuner-target">마이크를 시작해 주세요</p>
+            <strong id="detectedNote" class="detected-note">--</strong>
+            <div class="pitch-values">
+              <span id="detectedFrequency">-- Hz</span>
+              <span id="detectedCents">-- cents</span>
+            </div>
+          </div>
+
+          <div class="tuning-meter" aria-label="음정 오차 표시">
+            <div class="meter-track">
+              <span class="meter-mark left">-50</span>
+              <span class="meter-mark center">0</span>
+              <span class="meter-mark right">+50</span>
+              <div id="tunerNeedle" class="meter-needle"></div>
+            </div>
+            <div class="meter-labels"><span>낮음</span><span>정확</span><span>높음</span></div>
+          </div>
+
+          <button id="toggleTuner" class="primary-btn tuner-toggle" type="button">튜너 시작</button>
+          <p id="tunerMessage" class="helper tuner-message">조용한 곳에서 악기 한 음을 길게 연주하면 더 정확하게 감지됩니다.</p>
+          <p class="privacy-note">마이크 소리는 기기 안에서만 분석되며 저장하거나 전송하지 않습니다.</p>
+        </div>
+      </section>
+
+
+      <section id="vocalTune" class="panel" aria-labelledby="vocal-tune-title">
+        <div class="card vocal-card">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">VOCAL TUNE</p>
+              <h2 id="vocal-tune-title">보컬튠</h2>
+            </div>
+            <span id="vocalStatusBadge" class="tempo-label vocal-badge">대기 중</span>
+          </div>
+
+          <div class="vocal-settings">
+            <label>
+              <span>노래 키</span>
+              <select id="vocalKeySelect">
+                <option>C</option><option>C#</option><option>D</option><option>Eb</option>
+                <option>E</option><option>F</option><option>F#</option><option>G</option>
+                <option>Ab</option><option>A</option><option>Bb</option><option>B</option>
+              </select>
+            </label>
+            <label>
+              <span>스케일</span>
+              <select id="vocalScaleSelect">
+                <option value="major">메이저</option>
+                <option value="minor">내추럴 마이너</option>
+                <option value="majorPentatonic">메이저 펜타토닉</option>
+                <option value="minorPentatonic">마이너 펜타토닉</option>
+                <option value="chromatic">크로매틱 · 모든 음</option>
+              </select>
+            </label>
+            <label>
+              <span>목표음 방식</span>
+              <select id="vocalTargetMode">
+                <option value="auto">노래한 음에 가장 가까운 스케일음</option>
+                <option value="fixed">목표음을 직접 고정</option>
+              </select>
+            </label>
+            <label>
+              <span>감지 범위</span>
+              <select id="vocalRangeSelect">
+                <option value="all">전체 음역</option>
+                <option value="low">저음 중심</option>
+                <option value="middle">중음 중심</option>
+                <option value="high">고음 중심</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="vocal-scale-strip">
+            <span>사용 음</span>
+            <div id="vocalScaleNotes" class="vocal-scale-notes" aria-label="선택한 스케일의 음"></div>
+          </div>
+
+          <div id="vocalFixedTargetPanel" class="vocal-fixed-target" hidden>
+            <div class="vocal-fixed-heading">
+              <span>연습할 목표음</span>
+              <label>
+                <span class="sr-only">목표 옥타브</span>
+                <select id="vocalTargetOctave" aria-label="목표 옥타브">
+                  <option value="2">2옥타브</option>
+                  <option value="3">3옥타브</option>
+                  <option value="4" selected>4옥타브</option>
+                  <option value="5">5옥타브</option>
+                  <option value="6">6옥타브</option>
+                </select>
+              </label>
+            </div>
+            <div id="vocalTargetButtons" class="vocal-target-buttons" role="group" aria-label="목표음 선택"></div>
+          </div>
+
+          <div class="vocal-display" aria-live="polite">
+            <p id="vocalTargetText" class="vocal-target-text">마이크를 시작해 주세요</p>
+            <div class="vocal-note-pair">
+              <div>
+                <span>현재 음</span>
+                <strong id="vocalDetectedNote">--</strong>
+              </div>
+              <div class="vocal-arrow" aria-hidden="true">→</div>
+              <div>
+                <span>목표 음</span>
+                <strong id="vocalTargetNote">--</strong>
+              </div>
+            </div>
+            <div class="pitch-values vocal-pitch-values">
+              <span id="vocalFrequency">-- Hz</span>
+              <span id="vocalCents">-- cents</span>
+            </div>
+          </div>
+
+          <div class="tuning-meter vocal-meter" aria-label="보컬 음정 오차 표시">
+            <div class="meter-track">
+              <span class="meter-mark left">-50</span>
+              <span class="meter-mark center">0</span>
+              <span class="meter-mark right">+50</span>
+              <div id="vocalNeedle" class="meter-needle"></div>
+            </div>
+            <div class="meter-labels"><span>낮음</span><span>정확</span><span>높음</span></div>
+          </div>
+
+          <div class="vocal-score-grid">
+            <div class="vocal-score-card">
+              <span>정확도</span>
+              <strong id="vocalScore">--</strong>
+            </div>
+            <div class="vocal-score-card">
+              <span>정확 유지</span>
+              <strong id="vocalHoldTime">0.0초</strong>
+            </div>
+            <div class="vocal-score-card">
+              <span>안정도</span>
+              <strong id="vocalStability">--</strong>
+            </div>
+          </div>
+
+          <div class="vocal-trace-wrap">
+            <div class="vocal-trace-heading"><span>최근 음정 움직임</span><small>가운데에 가까울수록 정확합니다.</small></div>
+            <div id="vocalPitchTrace" class="vocal-pitch-trace" aria-label="최근 음정 움직임"></div>
+          </div>
+
+          <div class="vocal-action-row">
+            <button id="playVocalTarget" class="secondary-btn" type="button">목표음 듣기</button>
+            <button id="toggleVocalTune" class="primary-btn" type="button">보컬튠 시작</button>
+          </div>
+          <button id="resetVocalPractice" class="text-reset-btn" type="button">연습 기록 초기화</button>
+          <p id="vocalMessage" class="helper vocal-message">이어폰 없이 마이크 모니터링 소리를 내보내면 하울링이 생길 수 있어, 이번 버전은 음정을 화면으로 안내합니다.</p>
+
+          <p class="privacy-note">보컬튠 분석은 기기 안에서만 처리되며 외부로 전송하지 않습니다.</p>
+
+        </div>
+      </section>
+
+
+      <section id="recording" class="panel" aria-labelledby="recording-page-title">
+        <div class="card recording-card">
+          <div class="section-heading recording-page-heading">
+            <div>
+              <p class="section-kicker">RECORDING STUDIO</p>
+              <h2 id="recording-page-title">녹음</h2>
+            </div>
+            <span id="recordingStatusBadge" class="recording-status-badge">준비</span>
+          </div>
+          <section class="project-strip" aria-label="녹음 프로젝트">
+            <div class="project-main">
+              <label for="projectSelect">작업 프로젝트</label>
+              <select id="projectSelect" aria-label="녹음 프로젝트 선택"><option value="project-default">기본 녹음 프로젝트</option></select>
+              <span id="projectSummary" class="project-summary">프로젝트를 준비하고 있습니다.</span>
+            </div>
+            <div class="project-actions">
+              <button id="newProject" class="secondary-btn" type="button">새 프로젝트</button>
+              <button id="editProject" class="secondary-btn" type="button">정보 수정</button>
+              <button id="deleteProject" class="secondary-btn is-danger" type="button">삭제</button>
+            </div>
+          </section>
+          <section class="recorder-panel" aria-labelledby="recording-page-title">
+            <div class="recording-workbench-primary">
+            <div class="mr-studio" aria-labelledby="mr-studio-title">
+              <div class="mr-studio-heading">
+                <div>
+                  <span class="mr-label">BACKING TRACK</span>
+                  <strong id="mr-studio-title">MR 반주</strong>
+                </div>
+                <span id="mrDuration">--:--</span>
+              </div>
+
+              <label class="mr-file-field">
+                <span>MR 파일 선택</span>
+                <input id="mrFileInput" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm" />
+              </label>
+              <div id="mrFileInfo" class="mr-file-info">
+                <strong id="mrFileName">선택된 MR이 없습니다.</strong>
+                <span>MP3·WAV·M4A 등 기기에 저장된 반주 파일을 불러올 수 있습니다.</span>
+              </div>
+
+              <audio id="mrAudio" class="mr-audio" controls preload="auto" playsinline hidden></audio>
+
+              <div class="mr-action-row">
+                <button id="restartMr" class="secondary-btn" type="button" disabled>처음부터</button>
+                <button id="removeMr" class="secondary-btn" type="button" disabled>MR 제거</button>
+              </div>
+
+              <div class="mr-sync-panel" aria-labelledby="mr-sync-title">
+                <div class="mr-sync-heading">
+                  <strong id="mr-sync-title">싱크 보정</strong>
+                  <div class="mr-sync-number-wrap">
+                    <input id="mrSyncNumber" type="number" min="-800" max="800" step="10" value="0" inputmode="numeric" aria-label="싱크 보정값 직접 입력" />
+                    <span>ms</span>
+                  </div>
+                  <output id="mrSyncOffsetValue" class="sr-only">0ms</output>
+                </div>
+                <input id="mrSyncOffset" class="range compact" type="range" min="-800" max="800" step="10" value="0" aria-label="녹음 싱크 보정" />
+                <div class="mr-sync-scale" aria-hidden="true"><span>−800</span><span>−400</span><span>0</span><span>+400</span><span>+800</span></div>
+                <div class="mr-sync-actions">
+                  <button id="mrSyncMinus" class="secondary-btn" type="button">−10</button>
+                  <button id="mrSyncReset" class="secondary-btn" type="button">0으로</button>
+                  <button id="mrSyncPlus" class="secondary-btn" type="button">+10</button>
+                </div>
+                <p>보컬이 늦으면 +, 빠르면 −. 듣는 MR에는 적용되지 않습니다.</p>
+              </div>
+
+              <details class="mr-advanced-settings">
+                <summary>음량·녹음 옵션</summary>
+                <div class="mr-advanced-content">
+                  <div class="mr-mixer-grid">
+                    <label>
+                      <span>듣는 MR <output id="mrMonitorVolumeValue">80%</output></span>
+                      <input id="mrMonitorVolume" class="range compact" type="range" min="0" max="100" value="80" />
+                    </label>
+                    <label>
+                      <span>간편 재생 MR <output id="mrMixVolumeValue">70%</output></span>
+                      <input id="mrMixVolume" class="range compact" type="range" min="0" max="150" value="70" />
+                    </label>
+                    <label>
+                      <span>간편 재생 보컬 <output id="vocalMixVolumeValue">100%</output></span>
+                      <input id="vocalMixVolume" class="range compact" type="range" min="0" max="150" value="100" />
+                    </label>
+                  </div>
+                  <div class="mr-options">
+                    <label><input id="autoPlayMr" type="checkbox" checked /> MR 자동 재생</label>
+                    <label><input id="includeMrInRecording" type="checkbox" checked /> 간편 재생 파일에 MR 포함</label>
+                    <label><input id="autoStopOnMrEnd" type="checkbox" checked /> MR 종료 시 자동 저장</label>
+                    <label><input id="recordingCountIn" type="checkbox" checked /> 3초 카운트인</label>
+                  </div>
+                </div>
+              </details>
+              <div class="track-save-guide"><strong>보컬·MR 분리 저장</strong><span>녹음이 끝나면 보컬 원본과 MR을 각각 트랙으로 보관합니다. 간편 재생 파일도 함께 생성됩니다.</span></div>
+              <p id="mrMessage" class="helper mr-message">싱크 값은 기기에 자동 저장됩니다.</p>
+            </div>
+            </div>
+
+            <div class="recording-workbench-secondary">
+            <div class="recording-entry-fields">
+              <label class="recording-name-field">
+                <span>녹음 제목</span>
+                <input id="recordingName" type="text" maxlength="60" placeholder="예: 후렴 MR 녹음 1" autocomplete="off" />
+              </label>
+              <label class="recording-memo-field">
+                <span>메모 <small>선택</small></span>
+                <textarea id="recordingMemo" maxlength="500" rows="3" placeholder="연습 구간, 느낀 점, 다시 확인할 부분"></textarea>
+              </label>
+            </div>
+
+            <div id="recordingCountdown" class="recording-countdown" aria-live="assertive" hidden>3</div>
+
+            <div class="recording-monitor" aria-live="polite">
+              <strong id="recordingTimer">00:00</strong>
+              <div class="recording-level" aria-label="마이크 입력 크기">
+                <div id="recordingLevelBar" class="recording-level-bar"></div>
+              </div>
+              <span id="recordingStateText">MR을 선택하면 보컬과 반주를 각각의 트랙으로 저장합니다.</span>
+            </div>
+
+            <div class="recording-controls">
+              <button id="toggleRecording" class="record-btn" type="button">● 녹음 시작</button>
+              <button id="pauseRecording" class="secondary-btn" type="button" disabled>일시정지</button>
+              <button id="stopRecording" class="secondary-btn" type="button" disabled>정지·저장</button>
+            </div>
+
+            <div class="recording-library-heading">
+              <div>
+                <strong>내 녹음</strong>
+                <span id="recordingCount">0개</span>
+              </div>
+              <button id="deleteAllRecordings" class="text-danger-btn" type="button" disabled>전체 삭제</button>
+            </div>
+            <div id="recordingList" class="recording-list" aria-live="polite"></div>
+            <p id="recordingMessage" class="helper recording-message">보컬·MR 분리 트랙과 간편 재생 파일은 이 브라우저의 기기 저장 공간에 보관됩니다.</p>
+            </div>
+          </section>
+
+
+          <p class="privacy-note">선택한 MR과 분리 트랙은 기기 안에서만 처리되며 외부로 전송하지 않습니다.</p>
+        </div>
+      </section>
+
+      <section id="mixer" class="panel" aria-labelledby="mixer-title">
+        <div class="card mixer-card">
+          <div class="section-heading mixer-heading">
+            <div>
+              <p class="section-kicker">MULTI TRACK MIXER</p>
+              <h2 id="mixer-title">보컬·MR 믹서</h2>
+            </div>
+            <div class="mixer-heading-status">
+              <span id="mixerSaveState" class="mixer-save-state" data-state="saved">저장됨</span>
+              <span id="mixerStatusBadge" class="mixer-status-badge" data-mode="idle">준비</span>
+            </div>
+          </div>
+
+          <div class="mixer-toolbar">
+            <label class="mixer-recording-field">
+              <span>현재 프로젝트 녹음</span>
+              <select id="mixerRecordingSelect">
+                <option value="">녹음을 선택하세요</option>
+              </select>
+            </label>
+            <div class="mixer-toolbar-actions">
+              <button id="mixerUndo" class="secondary-btn mixer-control" type="button" disabled aria-label="실행 취소">↶ 취소</button>
+              <button id="mixerRedo" class="secondary-btn mixer-control" type="button" disabled aria-label="다시 실행">↷ 다시</button>
+              <button id="mixerReset" class="secondary-btn mixer-control" type="button" disabled>전체 초기화</button>
+            </div>
+          </div>
+
+          <div class="mixer-meta">
+            <div>
+              <strong id="mixerRecordingTitle">녹음을 선택해 주세요</strong>
+              <p id="mixerRecordingMemo">저장된 트랙을 앱 안에서 바로 재생하고 조절합니다.</p>
+            </div>
+            <div class="mixer-master-wrap">
+              <label class="mixer-master-control">
+                <span>마스터 <output id="mixerMasterVolumeValue">90%</output></span>
+                <input id="mixerMasterVolume" class="range compact mixer-control" type="range" min="0" max="150" value="90" disabled />
+              </label>
+              <input id="mixerMasterVolumeNumber" class="mixer-small-number mixer-control" type="number" min="0" max="150" step="1" value="90" disabled aria-label="마스터 음량 직접 입력" />
+            </div>
+          </div>
+          <p id="mixerLegacyNotice" class="mixer-legacy-notice" hidden></p>
+
+          <div class="mixer-transport">
+            <div class="mixer-transport-icons" aria-label="믹서 재생 제어">
+              <button id="mixerPlay" class="mixer-transport-icon is-primary" type="button" disabled aria-label="재생" title="재생 · Space"><span aria-hidden="true">▶</span></button>
+              <button id="mixerStop" class="mixer-transport-icon" type="button" disabled aria-label="정지" title="정지 · Esc"><span aria-hidden="true">■</span></button>
+              <button id="mixerCompare" class="mixer-transport-icon mixer-control" type="button" disabled aria-label="원본과 현재 믹스 비교" title="원본과 현재 믹스 비교"><span aria-hidden="true">A/B</span></button>
+            </div>
+            <div class="mixer-seek-wrap">
+              <input id="mixerSeek" class="range mixer-control" type="range" min="0" max="1" step="0.01" value="0" disabled aria-label="믹서 재생 위치" />
+              <div><span id="mixerCurrentTime">00:00</span><span>/</span><span id="mixerDuration">00:00</span></div>
+            </div>
+          </div>
+
+          <section class="mixer-editor" aria-label="멀티트랙 파형 편집기">
+            <div class="mixer-timeline-tools">
+              <div class="mixer-timeline-mode">
+                <strong>파형 타임라인</strong>
+                <span id="mixerSelectedTrack">트랙을 선택해 주세요</span>
+              </div>
+              <div class="mixer-timeline-options">
+                <label><span>확대</span><select id="mixerZoom" class="mixer-control" disabled><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option><option value="3">300%</option><option value="4">400%</option></select></label>
+                <label><span>스냅</span><select id="mixerSnap" class="mixer-control" disabled><option value="10" selected>10ms</option><option value="50">50ms</option><option value="100">100ms</option></select></label>
+              </div>
+            </div>
+            <div class="mixer-clip-toolbar" aria-label="클립 편집 도구">
+              <button id="mixerSplitClip" class="secondary-btn mixer-control" type="button" disabled>분할 <kbd>S</kbd></button>
+              <button id="mixerMuteClip" class="secondary-btn mixer-icon-tool mixer-control" type="button" disabled aria-pressed="false" aria-label="선택 클립 음소거" title="선택 클립 음소거"><span aria-hidden="true">🔇</span><span class="sr-only">클립 음소거</span></button>
+              <button id="mixerDeleteClip" class="secondary-btn is-danger mixer-control" type="button" disabled>클립 삭제</button>
+              <span class="mixer-tool-divider" aria-hidden="true"></span>
+              <button id="mixerLoopStart" class="secondary-btn mixer-control" type="button" disabled>반복 시작</button>
+              <button id="mixerLoopEnd" class="secondary-btn mixer-control" type="button" disabled>반복 끝</button>
+              <button id="mixerLoopToggle" class="secondary-btn mixer-control" type="button" disabled>구간 반복</button>
+              <small id="mixerLoopInfo">반복 구간 없음</small>
+            </div>
+            <div id="mixerTimelineViewport" class="mixer-timeline" aria-label="믹서 트랙 타임라인">
+              <div id="mixerTimelineContent" class="mixer-timeline-content">
+                <div class="mixer-timeline-ruler"><span class="mixer-ruler-track-label">TRACK</span><span id="mixerRulerStart">0:00</span><span id="mixerRulerMiddle">0:00</span><span id="mixerRulerEnd">0:00</span></div>
+                <div id="mixerTimelineRows" class="mixer-timeline-rows"></div>
+                <div id="mixerLoopRegion" class="mixer-loop-region" hidden aria-hidden="true"></div>
+                <div id="mixerPlayhead" class="mixer-playhead" aria-hidden="true"><span id="mixerPlayheadTime">00:00</span></div>
+              </div>
+            </div>
+            <button id="mixerTimelineResizeHandle" class="mixer-timeline-resize-handle" type="button" aria-label="타임라인 높이 조절" title="위아래로 드래그해 타임라인 높이 조절"><span aria-hidden="true"></span></button>
+            <p class="mixer-timeline-help">트랙 왼쪽의 M·S·▶·● 버튼으로 화면을 내리지 않고 바로 조작합니다. Ctrl+휠은 가로·세로 비례 확대, Shift+휠은 좌우 이동입니다.</p>
+            <div class="mixer-clip-inspector" aria-label="선택한 클립 설정">
+              <div class="mixer-clip-inspector-title"><strong>선택한 클립</strong><span id="mixerClipInfo">타임라인에서 클립을 선택해 주세요.</span></div>
+              <div class="mixer-clip-inspector-grid">
+                <label><span>클립 위치(ms)</span><input id="mixerClipPosition" class="mixer-control" type="number" step="10" value="0" disabled /></label>
+                <label><span>원본 시작(s)</span><input id="mixerClipSourceStart" class="mixer-control" type="number" min="0" step="0.01" value="0" disabled /></label>
+                <label><span>원본 끝(s)</span><input id="mixerClipSourceEnd" class="mixer-control" type="number" min="0.05" step="0.01" value="0" disabled /></label>
+                <label><span>클립 음량(%)</span><input id="mixerClipVolume" class="mixer-control" type="number" min="0" max="150" step="1" value="100" disabled /></label>
+                <label><span>페이드인(s)</span><input id="mixerClipFadeIn" class="mixer-control" type="number" min="0" max="10" step="0.01" value="0" disabled /></label>
+                <label><span>페이드아웃(s)</span><input id="mixerClipFadeOut" class="mixer-control" type="number" min="0" max="10" step="0.01" value="0" disabled /></label>
+              </div>
+            </div>
+          </section>
+
+          <div class="mixer-track-quickbar" aria-label="트랙 추가 및 녹음">
+            <button id="mixerAddTrack" class="mixer-add-track-btn" type="button" disabled aria-label="빈 트랙 추가" title="빈 트랙 추가">+</button>
+            <div class="mixer-track-quick-status">
+              <strong id="mixerRecordTarget">추가 트랙 없음</strong>
+              <span id="mixerOverdubStatus">+ 버튼으로 빈 트랙을 추가하세요.</span>
+            </div>
+            <div class="mixer-track-quick-actions">
+              <button id="mixerTrackRecordStart" class="mixer-record-compact" type="button" disabled>● 녹음</button>
+              <button id="mixerTrackRecordStop" class="mixer-stop-compact" type="button" disabled>■ 저장</button>
+              <button id="mixerRecordOptionsToggle" class="mixer-options-btn" type="button" aria-expanded="false" aria-controls="mixerRecordOptions">설정</button>
+              <span id="mixerOverdubTimer" class="mixer-overdub-timer">00:00</span>
+            </div>
+          </div>
+          <div id="mixerRecordOptions" class="mixer-record-options" hidden>
+            <label><span>녹음 방식</span><select id="mixerRecordMode" disabled><option value="manual">재생선부터 녹음</option><option value="punch">구간 펀치 인</option></select></label>
+            <label><span>시작 위치</span><input id="mixerRecordStartPosition" type="number" min="0" step="0.01" value="0" disabled /><em>초</em></label>
+            <label hidden><span>종료 위치</span><input id="mixerRecordEndPosition" type="number" min="0" step="0.01" value="0" disabled /><em>초</em></label>
+            <button id="mixerRecordUsePlayhead" class="secondary-btn" type="button" disabled>현재 재생선</button>
+            <button id="mixerRecordUseLoop" class="secondary-btn" hidden type="button" disabled>반복 구간 사용</button>
+            <label hidden><span>겹침 처리</span><select id="mixerPunchOverlap" disabled><option value="keep">기존 클립 유지</option><option value="mute">겹친 클립 음소거</option><option value="replace">겹친 구간 교체</option></select></label>
+            <label class="mixer-check"><input id="mixerOverdubCountIn" type="checkbox" checked disabled /><span>3초 프리롤·카운트인</span></label>
+            <div class="mixer-overdub-level" aria-label="추가 녹음 입력 레벨"><span id="mixerOverdubLevel"></span></div>
+          </div>
+
+          <div class="mixer-track-grid">
+            <article id="mixerMrRow" class="mixer-track-card is-mr is-unavailable">
+              <header>
+                <div><span class="mixer-track-kicker">BACKING TRACK</span><strong>MR 트랙</strong></div>
+                <div class="mixer-track-actions">
+                  <button id="mixerMrPlayOnly" class="mixer-mini-btn mixer-control" type="button" disabled>MR만</button>
+                  <button id="mixerMrMute" class="mixer-mini-btn mixer-control" type="button" disabled>음소거</button>
+                  <button id="mixerMrSolo" class="mixer-mini-btn mixer-control" type="button" disabled>솔로</button>
+                  <button id="mixerMrReset" class="mixer-mini-btn mixer-control" type="button" disabled>초기화</button>
+                </div>
+              </header>
+              <div class="mixer-control-grid">
+                <div class="mixer-value-control"><label><span>음량 <output id="mixerMrVolumeValue">80%</output></span><input id="mixerMrVolume" class="range compact mixer-control" type="range" min="0" max="150" value="80" disabled /></label><input id="mixerMrVolumeNumber" class="mixer-small-number mixer-control" type="number" min="0" max="150" step="1" value="80" disabled aria-label="MR 음량 직접 입력" /></div>
+                <div class="mixer-value-control"><label><span>팬 <output id="mixerMrPanValue">C</output></span><input id="mixerMrPan" class="range compact mixer-control" type="range" min="-100" max="100" value="0" disabled /></label><input id="mixerMrPanNumber" class="mixer-small-number mixer-control" type="number" min="-100" max="100" step="1" value="0" disabled aria-label="MR 팬 직접 입력" /></div>
+              </div>
+              <div class="mixer-offset-control">
+                <label><span>트랙 위치 <output id="mixerMrOffsetValue">0ms</output></span><input id="mixerMrOffset" class="range compact mixer-control" type="range" min="-1000" max="1000" step="10" value="0" disabled /></label>
+                <input id="mixerMrOffsetNumber" class="mixer-offset-number mixer-control" type="number" min="-1000" max="1000" step="10" value="0" disabled aria-label="MR 트랙 위치 직접 입력" />
+              </div>
+              <details class="mixer-advanced">
+                <summary>자르기·페이드 <span id="mixerMrEditValue">앞 0.0s · 뒤 0.0s</span></summary>
+                <div class="mixer-trim-grid">
+                  <label><span>앞 자르기</span><input id="mixerMrTrimStart" class="mixer-control" type="number" min="0" max="0" step="0.1" value="0" disabled /></label>
+                  <label><span>뒤 자르기</span><input id="mixerMrTrimEnd" class="mixer-control" type="number" min="0" max="0" step="0.1" value="0" disabled /></label>
+                </div>
+                <div class="mixer-control-grid">
+                  <label><span>페이드인</span><input id="mixerMrFadeIn" class="range compact mixer-control" type="range" min="0" max="10" step="0.1" value="0" disabled /></label>
+                  <label><span>페이드아웃</span><input id="mixerMrFadeOut" class="range compact mixer-control" type="range" min="0" max="10" step="0.1" value="0" disabled /></label>
+                </div>
+              </details>
+            </article>
+
+            <article id="mixerVocalRow" class="mixer-track-card is-vocal is-unavailable">
+              <header>
+                <div><span class="mixer-track-kicker">VOCAL TRACK</span><strong>보컬 트랙</strong></div>
+                <div class="mixer-track-actions">
+                  <button id="mixerVocalPlayOnly" class="mixer-mini-btn mixer-control" type="button" disabled>보컬만</button>
+                  <button id="mixerVocalMute" class="mixer-mini-btn mixer-control" type="button" disabled>음소거</button>
+                  <button id="mixerVocalSolo" class="mixer-mini-btn mixer-control" type="button" disabled>솔로</button>
+                  <button id="mixerVocalReset" class="mixer-mini-btn mixer-control" type="button" disabled>초기화</button>
+                </div>
+              </header>
+              <div class="mixer-control-grid">
+                <div class="mixer-value-control"><label><span>음량 <output id="mixerVocalVolumeValue">100%</output></span><input id="mixerVocalVolume" class="range compact mixer-control" type="range" min="0" max="150" value="100" disabled /></label><input id="mixerVocalVolumeNumber" class="mixer-small-number mixer-control" type="number" min="0" max="150" step="1" value="100" disabled aria-label="보컬 음량 직접 입력" /></div>
+                <div class="mixer-value-control"><label><span>팬 <output id="mixerVocalPanValue">C</output></span><input id="mixerVocalPan" class="range compact mixer-control" type="range" min="-100" max="100" value="0" disabled /></label><input id="mixerVocalPanNumber" class="mixer-small-number mixer-control" type="number" min="-100" max="100" step="1" value="0" disabled aria-label="보컬 팬 직접 입력" /></div>
+              </div>
+              <div class="mixer-offset-control">
+                <label><span>트랙 위치 <output id="mixerVocalOffsetValue">0ms</output></span><input id="mixerVocalOffset" class="range compact mixer-control" type="range" min="-1000" max="1000" step="10" value="0" disabled /></label>
+                <input id="mixerVocalOffsetNumber" class="mixer-offset-number mixer-control" type="number" min="-1000" max="1000" step="10" value="0" disabled aria-label="보컬 트랙 위치 직접 입력" />
+              </div>
+              <details class="mixer-advanced">
+                <summary>자르기·페이드 <span id="mixerVocalEditValue">앞 0.0s · 뒤 0.0s</span></summary>
+                <div class="mixer-trim-grid">
+                  <label><span>앞 자르기</span><input id="mixerVocalTrimStart" class="mixer-control" type="number" min="0" max="0" step="0.1" value="0" disabled /></label>
+                  <label><span>뒤 자르기</span><input id="mixerVocalTrimEnd" class="mixer-control" type="number" min="0" max="0" step="0.1" value="0" disabled /></label>
+                </div>
+                <div class="mixer-control-grid">
+                  <label><span>페이드인</span><input id="mixerVocalFadeIn" class="range compact mixer-control" type="range" min="0" max="10" step="0.1" value="0" disabled /></label>
+                  <label><span>페이드아웃</span><input id="mixerVocalFadeOut" class="range compact mixer-control" type="range" min="0" max="10" step="0.1" value="0" disabled /></label>
+                </div>
+              </details>
+            </article>
+          </div>
+
+          <div id="mixerExtraTrackGrid" class="mixer-extra-track-grid" aria-live="polite"></div>
+
+          <section class="mixer-export-panel" aria-labelledby="mixer-export-title">
+            <div class="mixer-subheading">
+              <div><span class="mixer-track-kicker">WAV EXPORT</span><strong id="mixer-export-title">믹스 내보내기</strong></div>
+              <span id="mixerOutputBadge" class="mixer-output-badge" data-state="idle">출력 대기</span>
+            </div>
+            <div class="mixer-export-grid">
+              <label><span>파일명</span><input id="mixerExportName" type="text" maxlength="80" placeholder="프로젝트명_최종믹스" disabled /></label>
+              <button id="mixerExportWav" class="primary-btn mixer-control" type="button" disabled>WAV 믹스 만들기</button>
+            </div>
+            <progress id="mixerExportProgress" class="mixer-export-progress" max="100" value="0" hidden></progress>
+            <p id="mixerExportStatus" class="helper">44.1kHz · 스테레오 · 16bit WAV로 생성합니다.</p>
+            <div id="mixerExportResult" class="mixer-export-result" hidden>
+              <audio id="mixerExportAudio" controls preload="metadata"></audio>
+              <button id="mixerExportDownload" class="secondary-btn" type="button">WAV 파일 저장</button>
+            </div>
+          </section>
+
+          <p id="mixerStatus" class="helper mixer-message">트랙이 있는 녹음을 선택해 주세요.</p>
+          <p class="privacy-note">트랙과 믹스 생성은 기기 안에서 처리되며 외부 서버로 전송하지 않습니다.</p>
+        </div>
+      </section>
+
+      <section id="chords" class="panel is-active" aria-labelledby="chords-title">
+        <div class="card chord-builder-card">
+          <div class="section-heading chord-heading">
+            <div>
+              <p class="section-kicker">CHORD MAKER</p>
+              <h2 id="chords-title">코드 진행 생성기</h2>
+            </div>
+            <button id="randomizeBtn" class="text-btn" type="button">새 진행 만들기</button>
+          </div>
+
+          <div class="form-grid chord-form-grid">
+            <label>
+              <span>으뜸음</span>
+              <select id="keySelect">
+                <option>C</option><option>C#</option><option>D</option><option>Eb</option>
+                <option>E</option><option>F</option><option>F#</option><option>G</option>
+                <option>Ab</option><option>A</option><option>Bb</option><option>B</option>
+              </select>
+            </label>
+            <label>
+              <span>조성</span>
+              <select id="modeSelect">
+                <option value="major">메이저</option>
+                <option value="minor">마이너</option>
+              </select>
+            </label>
+            <label>
+              <span>장르</span>
+              <select id="genreSelect">
+                <option value="pop">팝</option>
+                <option value="ballad">발라드</option>
+                <option value="rock">록</option>
+                <option value="indie">인디</option>
+                <option value="rnb">R&amp;B</option>
+                <option value="jazz">재즈</option>
+              </select>
+            </label>
+            <label>
+              <span>분위기</span>
+              <select id="moodSelect">
+                <option value="bright">밝고 편안함</option>
+                <option value="emotional">감성적</option>
+                <option value="powerful">강하고 시원함</option>
+                <option value="dreamy">몽환적</option>
+                <option value="tense">긴장감</option>
+              </select>
+            </label>
+            <label>
+              <span>진행 길이</span>
+              <select id="progressionLength">
+                <option value="4">4코드</option>
+                <option value="8">8코드</option>
+              </select>
+            </label>
+            <label>
+              <span>코드 색채</span>
+              <select id="complexitySelect">
+                <option value="basic">기본 3화음</option>
+                <option value="colorful">감성 확장 코드</option>
+                <option value="seventh">7th 중심</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="generator-summary" aria-live="polite">
+            <span id="generatorSummary">C 메이저 · 팝 · 밝고 편안함</span>
+            <small>코드를 선택하면 구성음과 건반을 확인할 수 있습니다.</small>
+          </div>
+
+          <div class="chord-result">
+            <p id="romanProgression" class="roman">I – V – vi – IV</p>
+            <div id="chordCards" class="chord-cards"></div>
+          </div>
+
+          <div class="selected-chord-panel">
+            <div class="selected-chord-header">
+              <div>
+                <span class="mini-label">선택한 코드</span>
+                <strong id="selectedChordName">C</strong>
+              </div>
+              <button id="playSelectedChord" class="secondary-small-btn" type="button">이 코드 듣기</button>
+            </div>
+            <p id="selectedChordInfo" class="selected-chord-info">구성음 C · E · G</p>
+            <div id="pianoKeyboard" class="piano-keyboard" aria-label="선택한 코드의 피아노 건반"></div>
+          </div>
+
+          <div class="playback-settings">
+            <label>
+              <span>재생 BPM</span>
+              <input id="chordBpm" type="number" min="40" max="200" value="90" inputmode="numeric" />
+            </label>
+            <label>
+              <span>코드당 박자</span>
+              <select id="beatsPerChord">
+                <option value="2">2박</option>
+                <option value="4" selected>4박</option>
+              </select>
+            </label>
+            <label>
+              <span>연주 방식</span>
+              <select id="playStyle">
+                <option value="block">한번에</option>
+                <option value="arpeggio">아르페지오</option>
+                <option value="pulse">리듬 반복</option>
+              </select>
+            </label>
+            <label>
+              <span>소리</span>
+              <select id="soundPreset">
+                <option value="soft">부드러운 피아노</option>
+                <option value="pad">따뜻한 패드</option>
+                <option value="pluck">짧은 플럭</option>
+              </select>
+            </label>
+          </div>
+
+          <label class="loop-option">
+            <input id="loopProgression" type="checkbox" />
+            <span>코드 진행 반복 재생</span>
+          </label>
+
+          <div class="playback-main-actions">
+            <button id="playProgression" class="primary-btn" type="button">전체 코드 재생</button>
+            <button id="stopProgression" class="secondary-btn" type="button">정지</button>
+          </div>
+
+          <div class="action-row chord-actions">
+            <button id="copyProgression" class="secondary-btn" type="button">코드 복사</button>
+            <button id="saveProgression" class="secondary-btn" type="button">내 진행 저장</button>
+          </div>
+          <p id="copyStatus" class="helper" aria-live="polite"></p>
+
+          <div class="saved-section">
+            <div class="saved-heading">
+              <div>
+                <span class="mini-label">MY PROGRESSIONS</span>
+                <h3>저장한 코드 진행</h3>
+              </div>
+              <span id="savedCount" class="saved-count">0개</span>
+            </div>
+            <div id="savedProgressions" class="saved-progressions"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <section id="studioTransport" class="studio-transport" aria-label="공통 재생 제어" data-mode="idle">
+      <div class="transport-now">
+        <span class="transport-dot" aria-hidden="true"></span>
+        <div>
+          <strong id="transportSource">준비</strong>
+          <span id="transportStatus">대기 중</span>
+        </div>
+      </div>
+      <div class="transport-shortcuts" aria-label="키보드 단축키">Space 재생 · R 녹음 · Esc 정지</div>
+      <div class="transport-actions">
+        <button id="transportPlay" type="button" aria-keyshortcuts="Space" aria-label="재생" title="재생 · Space">▶</button>
+        <button id="transportStop" type="button" aria-keyshortcuts="Escape" aria-label="정지" title="정지 · Esc">■</button>
+        <button id="transportRecord" class="is-record" type="button" aria-keyshortcuts="R" aria-label="녹음" title="녹음 · R">●</button>
+      </div>
+    </section>
+
+    <footer>
+      <p>펀치 인 녹음 · 백그라운드 재생 · v1.9.6</p>
+    </footer>
+  </div>
+
+  <dialog id="projectDialog" class="project-dialog">
+    <form id="projectForm" method="dialog">
+      <div class="project-dialog-heading">
+        <div>
+          <p class="section-kicker">RECORDING PROJECT</p>
+          <h2 id="projectDialogTitle">새 프로젝트</h2>
+        </div>
+        <button id="closeProjectDialog" class="sheet-close" type="button" aria-label="닫기">×</button>
+      </div>
+      <label>
+        <span>프로젝트 이름</span>
+        <input id="projectNameInput" type="text" maxlength="48" required placeholder="예: 새 싱글 데모" autocomplete="off" />
+      </label>
+      <label>
+        <span>프로젝트 메모 <small>선택</small></span>
+        <textarea id="projectMemoInput" rows="4" maxlength="300" placeholder="곡 키, 녹음 방향, 확인할 내용"></textarea>
+      </label>
+      <div class="project-dialog-actions">
+        <button id="cancelProjectDialog" class="secondary-btn" type="button">취소</button>
+        <button id="saveProjectDialog" class="primary-btn" type="submit">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="installSheet" class="install-sheet" hidden>
+    <button id="installSheetBackdrop" class="install-sheet-backdrop" type="button" aria-label="설치 안내 닫기"></button>
+    <section class="install-sheet-card" role="dialog" aria-modal="true" aria-labelledby="installSheetTitle">
+      <div class="install-sheet-heading">
+        <div>
+          <p class="section-kicker">MOBILE APP</p>
+          <h2 id="installSheetTitle">홈 화면에 설치</h2>
+        </div>
+        <button id="closeInstallSheet" class="sheet-close" type="button" aria-label="닫기">×</button>
+      </div>
+      <div id="installGuideContent" class="install-guide-content"></div>
+      <button id="nativeInstallBtn" class="primary-btn" type="button" hidden>지금 설치</button>
+      <p class="privacy-note">설치 후에는 일반 앱처럼 홈 화면에서 바로 열 수 있습니다.</p>
+    </section>
+  </div>
+
+  <script src="core/projects.js?v=1960" defer></script>
+  <script src="core/transport.js?v=1960" defer></script>
+  <script src="core/timeline.js?v=1960" defer></script>
+  <script src="core/edit-history.js?v=1960" defer></script>
+  <script src="core/waveform.js?v=1960" defer></script>
+  <script src="core/mix-renderer.js?v=1960" defer></script>
+  <script src="core/mixer.js?v=1960" defer></script>
+  <script src="app.js?v=1960" defer></script>
 </body>
 </html>
