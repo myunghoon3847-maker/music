@@ -14,7 +14,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=1962" />
+  <link rel="stylesheet" href="styles.css?v=1963" />
 </head>
 <body>
   <div class="app-shell">
@@ -43,8 +43,7 @@
     <nav class="tabs" aria-label="주요 기능">
       <button class="tab is-active" data-tab="chords" aria-selected="true">코드</button>
       <button class="tab" data-tab="vocalTune" aria-selected="false">보컬튠</button>
-      <button class="tab" data-tab="recording" aria-selected="false">녹음</button>
-      <button class="tab" data-tab="mixer" aria-selected="false">믹서</button>
+      <button class="tab" data-tab="mixer" aria-selected="false">녹음·믹서</button>
       <button class="tab" data-tab="metronome" aria-selected="false">메트로놈</button>
       <button class="tab" data-tab="tuner" aria-selected="false">튜너</button>
     </nav>
@@ -296,7 +295,7 @@
       </section>
 
 
-      <section id="recording" class="panel" aria-labelledby="recording-page-title">
+      <section id="recording" class="panel legacy-recording-panel" aria-labelledby="recording-page-title" hidden aria-hidden="true">
         <div class="card recording-card">
           <div class="section-heading recording-page-heading">
             <div>
@@ -442,8 +441,8 @@
         <div class="card mixer-card">
           <div class="section-heading mixer-heading">
             <div>
-              <p class="section-kicker">MULTI TRACK MIXER</p>
-              <h2 id="mixer-title">보컬·MR 믹서</h2>
+              <p class="section-kicker">RECORDING · MULTI TRACK MIXER</p>
+              <h2 id="mixer-title">녹음·믹서</h2>
             </div>
             <div class="mixer-heading-status">
               <span id="mixerSaveState" class="mixer-save-state" data-state="saved">저장됨</span>
@@ -452,24 +451,38 @@
             </div>
           </div>
 
-          <div class="mixer-toolbar">
+          <div class="mixer-toolbar mixer-session-toolbar">
             <label class="mixer-recording-field">
-              <span>현재 프로젝트 녹음</span>
+              <span>현재 녹음 세션</span>
               <select id="mixerRecordingSelect">
-                <option value="">녹음을 선택하세요</option>
+                <option value="">세션을 선택하세요</option>
               </select>
             </label>
+            <div class="mixer-session-create">
+              <input id="mixerMrImportInput" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm" hidden />
+              <button id="mixerImportMr" class="secondary-btn" type="button">MR 가져오기</button>
+              <span id="mixerImportMrStatus" class="mixer-import-status">MR을 가져오면 보컬 트랙이 자동 생성됩니다.</span>
+              <div class="mixer-session-actions">
+                <button id="mixerRenameSession" class="mixer-mini-action" type="button" disabled>이름 변경</button>
+                <button id="mixerDeleteSession" class="mixer-mini-action is-danger" type="button" disabled>세션 삭제</button>
+              </div>
+            </div>
             <div class="mixer-toolbar-actions">
               <button id="mixerUndo" class="secondary-btn mixer-control" type="button" disabled aria-label="실행 취소">↶ 취소</button>
               <button id="mixerRedo" class="secondary-btn mixer-control" type="button" disabled aria-label="다시 실행">↷ 다시</button>
+              <button id="mixerRecovery" class="secondary-btn" type="button" disabled title="최근 믹서 편집 저장본 복구">편집 복구</button>
               <button id="mixerReset" class="secondary-btn mixer-control" type="button" disabled>전체 초기화</button>
             </div>
+          </div>
+          <div id="mixerRecoveryNotice" class="mixer-recovery-notice" hidden>
+            <strong>편집 데이터 보호 모드</strong>
+            <span id="mixerRecoveryMessage">저장된 클립을 안전하게 다시 읽고 있습니다.</span>
           </div>
 
           <div class="mixer-meta">
             <div>
               <strong id="mixerRecordingTitle">녹음을 선택해 주세요</strong>
-              <p id="mixerRecordingMemo">저장된 트랙을 앱 안에서 바로 재생하고 조절합니다.</p>
+              <p id="mixerRecordingMemo">MR을 가져오고 보컬을 녹음한 뒤 같은 화면에서 편집합니다.</p>
             </div>
             <div class="mixer-master-wrap">
               <label class="mixer-master-control">
@@ -835,7 +848,7 @@
     </section>
 
     <footer>
-      <p>트랙 단축키 · 빈 구간 추가 녹음 · 클립 트랙 이동 · v1.9.6.2</p>
+      <p>편집 복구 · 믹서 녹음 통합 · v1.9.6.3</p>
     </footer>
   </div>
 
@@ -879,13 +892,13 @@
     </section>
   </div>
 
-  <script src="core/projects.js?v=1962" defer></script>
-  <script src="core/transport.js?v=1962" defer></script>
-  <script src="core/timeline.js?v=1962" defer></script>
-  <script src="core/edit-history.js?v=1962" defer></script>
-  <script src="core/waveform.js?v=1962" defer></script>
-  <script src="core/mix-renderer.js?v=1962" defer></script>
-  <script src="core/mixer.js?v=1962" defer></script>
-  <script src="app.js?v=1962" defer></script>
+  <script src="core/projects.js?v=1963" defer></script>
+  <script src="core/transport.js?v=1963" defer></script>
+  <script src="core/timeline.js?v=1963" defer></script>
+  <script src="core/edit-history.js?v=1963" defer></script>
+  <script src="core/waveform.js?v=1963" defer></script>
+  <script src="core/mix-renderer.js?v=1963" defer></script>
+  <script src="core/mixer.js?v=1963" defer></script>
+  <script src="app.js?v=1963" defer></script>
 </body>
 </html>

@@ -4029,3 +4029,75 @@ body.is-resizing-mixer-timeline { cursor: ns-resize; user-select: none; }
   font-weight: 750;
   white-space: nowrap;
 }
+
+/* v1.9.6.3 · 편집 복구 및 녹음·믹서 통합 */
+.legacy-recording-panel[hidden] { display: none !important; }
+.mixer-session-toolbar {
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.15fr) auto;
+  align-items: end;
+}
+.mixer-session-create {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.mixer-session-create .secondary-btn { white-space: nowrap; }
+.mixer-import-status {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mixer-recovery-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(196, 91, 42, 0.28);
+  border-radius: 12px;
+  background: #fff4e8;
+  color: #763914;
+  font-size: 0.82rem;
+}
+.mixer-recovery-notice[hidden] { display: none; }
+.mixer-recovery-notice strong { flex: 0 0 auto; }
+#mixerRecovery:not(:disabled) { border-color: rgba(196, 91, 42, 0.35); }
+.mixer-clip.is-unresolved { opacity: 0.72; }
+
+@media (max-width: 1100px) {
+  .mixer-session-toolbar { grid-template-columns: minmax(220px, 1fr) minmax(240px, 1fr); }
+  .mixer-session-toolbar .mixer-toolbar-actions { grid-column: 1 / -1; justify-content: flex-start; }
+}
+
+@media (max-width: 760px) {
+  .mixer-session-toolbar { grid-template-columns: 1fr; }
+  .mixer-session-toolbar .mixer-toolbar-actions { grid-column: auto; }
+  .mixer-session-create { grid-template-columns: auto 1fr; }
+  .mixer-import-status { white-space: normal; }
+  .mixer-recovery-notice { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .mixer-toolbar-actions #mixerRecovery { grid-column: auto; }
+}
+.mixer-session-create { grid-template-columns: auto minmax(140px, 1fr) auto; }
+.mixer-session-actions { display: flex; gap: 5px; }
+.mixer-mini-action {
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.mixer-mini-action:disabled { opacity: 0.45; cursor: default; }
+.mixer-mini-action.is-danger { color: #a83232; }
+@media (max-width: 760px) {
+  .mixer-session-create { grid-template-columns: auto 1fr; }
+  .mixer-session-actions { grid-column: 1 / -1; }
+}

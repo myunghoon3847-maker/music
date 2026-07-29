@@ -24,15 +24,31 @@
 
   function sanitizeClip(clip = {}, buffer, fallback = {}) {
     const duration = Math.max(0, Number(buffer?.duration) || 0);
-    if (!duration) return null;
-    let sourceStartSec = clamp(clip.sourceStartSec ?? fallback.sourceStartSec ?? 0, 0, Math.max(0, duration - MIN_CLIP_SECONDS));
-    let sourceEndSec = clamp(clip.sourceEndSec ?? fallback.sourceEndSec ?? duration, sourceStartSec + MIN_CLIP_SECONDS, duration);
-    if (sourceEndSec - sourceStartSec < MIN_CLIP_SECONDS) {
-      sourceEndSec = Math.min(duration, sourceStartSec + MIN_CLIP_SECONDS);
-      sourceStartSec = Math.max(0, sourceEndSec - MIN_CLIP_SECONDS);
-    }
-    const clipDuration = Math.max(MIN_CLIP_SECONDS, sourceEndSec - sourceStartSec);
     const sourceTrackKey = String(clip.sourceTrackKey || fallback.sourceTrackKey || "");
+    let sourceStartSec;
+    let sourceEndSec;
+    let unresolved = false;
+
+    if (duration > 0) {
+      sourceStartSec = clamp(clip.sourceStartSec ?? fallback.sourceStartSec ?? 0, 0, Math.max(0, duration - MIN_CLIP_SECONDS));
+      sourceEndSec = clamp(clip.sourceEndSec ?? fallback.sourceEndSec ?? duration, sourceStartSec + MIN_CLIP_SECONDS, duration);
+      if (sourceEndSec - sourceStartSec < MIN_CLIP_SECONDS) {
+        sourceEndSec = Math.min(duration, sourceStartSec + MIN_CLIP_SECONDS);
+        sourceStartSec = Math.max(0, sourceEndSec - MIN_CLIP_SECONDS);
+      }
+    } else {
+      // 오디오 디코딩이 잠시 실패하거나 소스 트랙을 아직 찾지 못해도
+      // 저장된 클립 메타데이터를 삭제하지 않는다.
+      sourceStartSec = Math.max(0, Number(clip.sourceStartSec ?? fallback.sourceStartSec ?? 0) || 0);
+      const savedEnd = Number(clip.sourceEndSec ?? fallback.sourceEndSec);
+      sourceEndSec = Number.isFinite(savedEnd) && savedEnd > sourceStartSec
+        ? savedEnd
+        : sourceStartSec + MIN_CLIP_SECONDS;
+      if (sourceEndSec - sourceStartSec < MIN_CLIP_SECONDS) sourceEndSec = sourceStartSec + MIN_CLIP_SECONDS;
+      unresolved = true;
+    }
+
+    const clipDuration = Math.max(MIN_CLIP_SECONDS, sourceEndSec - sourceStartSec);
     return {
       id: String(clip.id || makeId()),
       sourceTrackKey,
@@ -43,6 +59,7 @@
       fadeIn: clamp(clip.fadeIn ?? fallback.fadeIn ?? 0, 0, Math.min(10, clipDuration / 2)),
       fadeOut: clamp(clip.fadeOut ?? fallback.fadeOut ?? 0, 0, Math.min(10, clipDuration / 2)),
       muted: Boolean(clip.muted ?? fallback.muted ?? false),
+      unresolved,
       name: String(clip.name || fallback.name || "").slice(0, 60)
     };
   }

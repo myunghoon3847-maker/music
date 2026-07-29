@@ -12,6 +12,7 @@
     context: null, loadingToken: 0, playing: false, compareOriginal: false, startAt: 0, startPosition: 0,
     position: 0, duration: 0, mixDuration: 0, frameId: null, endTimer: null, saveTimer: null,
     saveRevision: 0, savedRevision: 0, savePending: null, saveInFlight: false, savePromise: null, saveFailures: new Map(),
+    recoveryLocked: false, recoveryReason: "", recoveryBackup: null, importingMr: false,
     restartTimer: null, seeking: false, initialized: false, exportUrl: "", exportBlob: null, exporting: false, addingTrack: false,
     timeline: { zoom: 1, snapMs: 10, selectedTrackKey: "", selectedClipId: "", drag: null, loopEnabled: false, loopStartSec: 0, loopEndSec: 0, lastAutoScrollAt: 0, resize: null },
     history: window.HoonEditHistory?.create?.(60) || null, historyCoalesce: { key: "", at: 0 },
@@ -56,7 +57,27 @@
   function getClipBuffer(trackKey, clip = {}) { return state.buffers[getClipSourceKey(trackKey, clip)] || null; }
   function trackHasAudio(trackKey) {
     const clips = state.settings[trackKey]?.clips || [];
+    // 디코딩 실패가 있어도 저장된 클립 메타데이터는 편집 화면에서 유지한다.
+    return Boolean(state.buffers[trackKey]) || clips.length > 0;
+  }
+
+  function trackHasPlayableAudio(trackKey) {
+    const clips = state.settings[trackKey]?.clips || [];
     return Boolean(state.buffers[trackKey]) || clips.some((clip) => Boolean(getClipBuffer(trackKey, clip)));
+  }
+
+  function countClips(settings = state.settings) {
+    return Object.entries(settings || {}).reduce((sum, [key, value]) => key === "masterVolume" ? sum : sum + (Array.isArray(value?.clips) ? value.clips.length : 0), 0);
+  }
+
+  function setRecoveryMode(enabled, message = "") {
+    state.recoveryLocked = Boolean(enabled);
+    state.recoveryReason = message;
+    const notice = $("mixerRecoveryNotice");
+    const text = $("mixerRecoveryMessage");
+    if (notice) notice.hidden = !state.recoveryLocked;
+    if (text) text.textContent = message || "저장된 편집 데이터를 보호하고 있습니다.";
+    if (state.recoveryLocked) setSaveState("error", "보호 모드");
   }
 
   function buildTrackDefs(recording) {
@@ -341,8 +362,9 @@
   function clipElementHtml(def, clipWindow, index) {
     const selected = state.timeline.selectedClipId === clipWindow.clipId;
     const muted = Boolean(clipWindow.muted);
+    const unresolved = Boolean(clipWindow.unresolved);
     const label = clipWindow.name || `${def.name} ${index + 1}`;
-    return `<span class="mixer-clip is-${def.kind} ${selected ? "is-selected" : ""} ${muted ? "is-muted" : ""}" data-track-clip="${escapeHtml(def.key)}" data-clip-id="${escapeHtml(clipWindow.clipId)}" tabindex="0"><canvas aria-hidden="true"></canvas><em>${escapeHtml(label)}</em><small>${formatTime(clipWindow.duration)}</small><button class="mixer-clip-mute" data-clip-action="mute" type="button" aria-label="${muted ? "클립 음소거 해제" : "클립 음소거"}" title="${muted ? "클립 음소거 해제" : "클립 음소거"}">${muted ? "🔇" : "M"}</button><i class="mixer-trim-handle is-start" data-trim-edge="start"></i><i class="mixer-trim-handle is-end" data-trim-edge="end"></i></span>`;
+    return `<span class="mixer-clip is-${def.kind} ${selected ? "is-selected" : ""} ${muted ? "is-muted" : ""} ${unresolved ? "is-unresolved" : ""}" data-track-clip="${escapeHtml(def.key)}" data-clip-id="${escapeHtml(clipWindow.clipId)}" tabindex="0"><canvas aria-hidden="true"></canvas><em>${escapeHtml(label)}</em><small>${formatTime(clipWindow.duration)}</small><button class="mixer-clip-mute" data-clip-action="mute" type="button" aria-label="${muted ? "클립 음소거 해제" : "클립 음소거"}" title="${muted ? "클립 음소거 해제" : "클립 음소거"}">${muted ? "🔇" : "M"}</button><i class="mixer-trim-handle is-start" data-trim-edge="start"></i><i class="mixer-trim-handle is-end" data-trim-edge="end"></i></span>`;
   }
 
   function timelineHeaderHtml(def) {
@@ -405,7 +427,7 @@
       if (!clipWindow || !state.duration) return;
       element.style.left = `${(clipWindow.startSec / state.duration) * 100}%`;
       element.style.width = `${Math.max(0.35, (clipWindow.duration / state.duration) * 100)}%`;
-      element.title = `${def.name} · ${formatTime(clipWindow.duration)} · 시작 ${formatTime(clipWindow.startSec)}${clipWindow.muted ? " · 음소거" : ""}`;
+      element.title = `${def.name} · ${formatTime(clipWindow.duration)} · 시작 ${formatTime(clipWindow.startSec)}${clipWindow.muted ? " · 음소거" : ""}${clipWindow.unresolved ? " · 오디오 소스 확인 필요" : ""}`;
       drawClipWaveform(element, def, clipWindow);
     });
   }
@@ -891,6 +913,8 @@
 
   function updateAvailability() {
     const hasAny = getVisibleTrackDefs().some((def) => trackHasAudio(def.key));
+    if ($("mixerRenameSession")) $("mixerRenameSession").disabled = !state.recording || state.overdub.active || state.exporting;
+    if ($("mixerDeleteSession")) $("mixerDeleteSession").disabled = !state.recording || state.overdub.active || state.exporting;
     const selectedExtra = getSelectedExtraDef();
     BASE_KEYS.forEach((key) => {
       const available = Boolean(state.buffers[key]);
@@ -960,9 +984,13 @@
     stop({ keepOverdub: true }); revokeExport();
     Object.values(state.buffers).forEach((buffer) => window.HoonWaveform?.clear?.(buffer));
     state.recording = recording || null; state.selectedId = recording ? String(recording.id) : "";
+    setRecoveryMode(false);
     setSaveState(getCurrentSaveFailure() ? "error" : "saved");
     state.trackDefs = buildTrackDefs(recording); state.buffers = {}; state.originalBuffer = null;
-    state.settings = normalizeSettings(recording, state.trackDefs); state.position = 0; state.duration = 0; state.mixDuration = 0; state.compareOriginal = false;
+    state.settings = normalizeSettings(recording, state.trackDefs);
+    const savedSettingsSnapshot = clone(state.settings);
+    const savedClipCount = countClips(savedSettingsSnapshot);
+    state.position = 0; state.duration = 0; state.mixDuration = 0; state.compareOriginal = false;
     Object.assign(state.timeline, { selectedTrackKey: "", selectedClipId: "", drag: null, loopEnabled: false, loopStartSec: 0, loopEndSec: 0 });
     state.history?.clear?.(); state.historyCoalesce = { key: "", at: 0 };
     updateMeta(); renderExtraStructure(); renderControls(); calculateDuration();
@@ -979,16 +1007,27 @@
       const visibleDefs = getVisibleTrackDefs();
       const hadClipData = visibleDefs.filter((def) => state.buffers[def.key]).every((def) => Number(state.settings[def.key]?.clipModelVersion) >= 1);
       sanitizeAllTrackEdits();
-      const playableDefs = visibleDefs.filter((def) => trackHasAudio(def.key));
-      if (!playableDefs.length) throw new Error("재생할 수 있는 분리 트랙을 찾지 못했습니다.");
-      const firstDef = visibleDefs.find((def) => def.key === "vocal" && trackHasAudio(def.key)) || playableDefs[0] || visibleDefs[0];
-      state.timeline.selectedTrackKey = firstDef.key;
-      state.timeline.selectedClipId = state.settings[firstDef.key]?.clips?.[0]?.id || "";
+      const sanitizedClipCount = countClips(state.settings);
+      const unresolvedCount = Object.entries(state.settings).reduce((sum, [key, value]) => key === "masterVolume" ? sum : sum + (Array.isArray(value?.clips) ? value.clips.filter((clip) => clip?.unresolved).length : 0), 0);
+      if (savedClipCount > 0 && sanitizedClipCount < savedClipCount) {
+        state.settings = savedSettingsSnapshot;
+        setRecoveryMode(true, `저장된 ${savedClipCount}개 클립 중 일부가 새 버전에서 누락될 위험을 감지해 자동 저장을 차단했습니다.`);
+      } else if (unresolvedCount > 0) {
+        setRecoveryMode(true, `${unresolvedCount}개 클립의 오디오 소스를 아직 읽지 못했습니다. 클립 정보는 보존했으며 자동 저장을 차단했습니다.`);
+      }
+      const playableDefs = visibleDefs.filter((def) => trackHasPlayableAudio(def.key));
+      if (!playableDefs.length && !savedClipCount) throw new Error("재생할 수 있는 분리 트랙을 찾지 못했습니다.");
+      const firstDef = visibleDefs.find((def) => def.key === "vocal" && trackHasAudio(def.key)) || visibleDefs.find((def) => trackHasAudio(def.key)) || playableDefs[0] || visibleDefs[0];
+      if (firstDef) {
+        state.timeline.selectedTrackKey = firstDef.key;
+        state.timeline.selectedClipId = state.settings[firstDef.key]?.clips?.[0]?.id || "";
+      }
       renderExtraStructure(); calculateDuration(); renderControls(); updateMeta();
-      if (!hadClipData) scheduleSave();
+      if (!hadClipData && !state.recoveryLocked) scheduleSave();
+      await refreshRecoveryAvailability();
       const clipCount = visibleDefs.reduce((sum, def) => sum + (state.settings[def.key]?.clips?.length || 0), 0);
       const emptyCount = visibleDefs.filter((def) => !def.base && !trackHasAudio(def.key)).length;
-      setStatus(`${visibleDefs.length}개 트랙 · ${clipCount}개 클립${emptyCount ? ` · 빈 트랙 ${emptyCount}개` : ""}를 준비했습니다.`, "idle");
+      setStatus(state.recoveryLocked ? `편집 데이터 보호 모드 · ${clipCount}개 클립을 보존했습니다.` : `${visibleDefs.length}개 트랙 · ${clipCount}개 클립${emptyCount ? ` · 빈 트랙 ${emptyCount}개` : ""}를 준비했습니다.`, state.recoveryLocked ? "error" : "idle");
     } catch (error) {
       state.buffers = {}; state.originalBuffer = null; state.trackDefs = []; state.timeline.selectedTrackKey = ""; state.timeline.selectedClipId = "";
       renderExtraStructure(); calculateDuration(); renderControls();
@@ -996,10 +1035,88 @@
     }
   }
 
+  async function refreshRecoveryAvailability() {
+    const button = $("mixerRecovery");
+    state.recoveryBackup = null;
+    if (!button) return;
+    if (!state.recording?.id || !state.callbacks.getLatestBackup) { button.disabled = true; return; }
+    try {
+      state.recoveryBackup = await state.callbacks.getLatestBackup(state.recording.id);
+      button.disabled = !state.recoveryBackup;
+      button.title = state.recoveryBackup ? `최근 편집 저장본 복구 · ${new Date(state.recoveryBackup.createdAt).toLocaleString("ko-KR")}` : "복구 가능한 이전 편집 저장본이 없습니다.";
+    } catch { button.disabled = true; }
+  }
+
+  async function recoverLatestEdit() {
+    if (!state.recording?.id || !state.callbacks.restoreBackup) return;
+    const backup = state.recoveryBackup || await state.callbacks.getLatestBackup?.(state.recording.id);
+    if (!backup) { setStatus("복구 가능한 이전 편집 저장본이 없습니다.", "error"); return; }
+    if (!confirm(`최근 편집 저장본(${new Date(backup.createdAt).toLocaleString("ko-KR")})으로 복구할까요? 현재 편집값은 복구 전에 별도로 보관합니다.`)) return;
+    try {
+      await flushSaveQueue({ force: true });
+      const updated = await state.callbacks.restoreBackup(state.recording, backup);
+      if (!updated) throw new Error("복구된 녹음 정보를 받지 못했습니다.");
+      setRecoveryMode(false);
+      await loadRecording(updated);
+      setStatus("최근 편집 저장본을 복구했습니다.", "idle");
+    } catch (error) { setStatus(`편집 복구 실패: ${error.message}`, "error"); }
+  }
+
+  async function renameCurrentSession() {
+    if (!state.recording || !state.callbacks.renameSession) return;
+    const next = prompt("녹음 세션 이름", state.recording.name || "새 녹음 세션");
+    if (next == null || !String(next).trim()) return;
+    try {
+      const updated = await state.callbacks.renameSession(state.recording, String(next).trim());
+      if (updated) { state.recording = updated; refresh(); if ($("mixerRecordingSelect")) $("mixerRecordingSelect").value = String(updated.id); updateMeta(); }
+      setStatus("녹음 세션 이름을 변경했습니다.", "idle");
+    } catch (error) { setStatus(`이름 변경 실패: ${error.message}`, "error"); }
+  }
+
+  async function deleteCurrentSession() {
+    if (!state.recording || !state.callbacks.deleteSession) return;
+    if (!confirm(`‘${state.recording.name || "녹음 세션"}’을 삭제할까요? MR과 모든 트랙이 함께 삭제됩니다.`)) return;
+    try {
+      await flushSaveQueue({ force: true });
+      await state.callbacks.deleteSession(state.recording);
+      await loadRecording(null);
+      refresh();
+      setStatus("녹음 세션을 삭제했습니다.", "idle");
+    } catch (error) { setStatus(`세션 삭제 실패: ${error.message}`, "error"); }
+  }
+
+  async function importMrFile(file) {
+    if (!(file instanceof File || file instanceof Blob)) return;
+    const status = $("mixerImportMrStatus");
+    if (state.importingMr) return;
+    state.importingMr = true;
+    if (status) status.textContent = "MR을 새 녹음 세션으로 저장하고 있습니다.";
+    if ($("mixerImportMr")) $("mixerImportMr").disabled = true;
+    try {
+      if (!String(file.type || "").startsWith("audio/") && !/\.(mp3|wav|m4a|aac|ogg|webm)$/i.test(file.name || "")) throw new Error("오디오 파일을 선택해 주세요.");
+      const updated = await state.callbacks.createSessionFromMr?.(file);
+      if (!updated) throw new Error("MR 녹음 세션을 생성하지 못했습니다.");
+      refresh();
+      if ($("mixerRecordingSelect")) $("mixerRecordingSelect").value = String(updated.id);
+      await loadRecording(updated);
+      const vocalTrack = getVisibleTrackDefs().find((def) => !def.base);
+      if (vocalTrack) selectTrack(vocalTrack.key, { scroll: true });
+      if (status) status.textContent = `‘${file.name || "MR"}’을 가져왔습니다. 보컬 트랙을 선택하고 ● 또는 R로 녹음하세요.`;
+      setStatus("MR 가져오기 완료 · 믹서에서 바로 녹음할 수 있습니다.", "idle");
+    } catch (error) {
+      if (status) status.textContent = `MR 가져오기 실패 · ${error.message}`;
+      setStatus(`MR 가져오기 실패: ${error.message}`, "error");
+    } finally {
+      state.importingMr = false;
+      if ($("mixerImportMr")) $("mixerImportMr").disabled = false;
+      const input = $("mixerMrImportInput"); if (input) input.value = "";
+    }
+  }
+
   function renderRecordingSelect() {
     const select = $("mixerRecordingSelect"); if (!select) return;
     const recordings = [...getRecordings()].sort((a, b) => Number(b.createdAt) - Number(a.createdAt)); const previous = state.selectedId;
-    select.innerHTML = ""; const placeholder = document.createElement("option"); placeholder.value = ""; placeholder.textContent = recordings.length ? "녹음을 선택하세요" : "현재 프로젝트에 녹음이 없습니다"; select.appendChild(placeholder);
+    select.innerHTML = ""; const placeholder = document.createElement("option"); placeholder.value = ""; placeholder.textContent = recordings.length ? "녹음 세션을 선택하세요" : "MR 가져오기로 새 세션을 만드세요"; select.appendChild(placeholder);
     recordings.forEach((recording) => {
       const option = document.createElement("option"); option.value = String(recording.id);
       const count = buildTrackDefs(recording).filter((def) => !def.sourceOnly).length; option.textContent = `${recording.name || "보컬 녹음"}${count ? ` · ${count}트랙` : " · 믹스만"}`; select.appendChild(option);
@@ -1032,7 +1149,10 @@
         const updated = await state.callbacks.saveSettings?.(latest, clone(job.settings));
         state.savedRevision = Math.max(state.savedRevision, job.revision);
         state.saveFailures.delete(job.recordingId);
-        if (updated && currentRecordingId() === job.recordingId) state.recording = updated;
+        if (updated && currentRecordingId() === job.recordingId) {
+          state.recording = updated;
+          await refreshRecoveryAvailability();
+        }
       } catch (error) {
         state.saveFailures.set(job.recordingId, { ...job, error });
         if (currentRecordingId() === job.recordingId) {
@@ -1053,6 +1173,10 @@
 
   function scheduleSave({ immediate = false } = {}) {
     if (!state.recording) return;
+    if (state.recoveryLocked) {
+      setStatus("편집 데이터 보호 모드에서는 자동 저장하지 않습니다. 먼저 편집 복구를 실행해 주세요.", "error");
+      return;
+    }
     const recordingId = currentRecordingId();
     state.saveRevision += 1;
     state.savePending = {
@@ -2192,6 +2316,11 @@
   function init(callbacks = {}) {
     if (state.initialized) return; state.callbacks = callbacks;
     $("mixerRecordingSelect")?.addEventListener("change", (event) => selectRecording(event.target.value));
+    $("mixerImportMr")?.addEventListener("click", () => $("mixerMrImportInput")?.click());
+    $("mixerMrImportInput")?.addEventListener("change", (event) => importMrFile(event.target.files?.[0]));
+    $("mixerRecovery")?.addEventListener("click", recoverLatestEdit);
+    $("mixerRenameSession")?.addEventListener("click", renameCurrentSession);
+    $("mixerDeleteSession")?.addEventListener("click", deleteCurrentSession);
     $("mixerPlay")?.addEventListener("click", toggle); $("mixerStop")?.addEventListener("click", () => stop()); $("mixerCompare")?.addEventListener("click", toggleCompare); $("mixerReset")?.addEventListener("click", resetSettings);
     $("mixerUndo")?.addEventListener("click", undoEdit); $("mixerRedo")?.addEventListener("click", redoEdit);
     $("mixerZoom")?.addEventListener("change", (event) => setTimelineZoom(event.target.value));
@@ -2241,7 +2370,7 @@
       if (state.overdub.active) { try { state.overdub.recorder?.stop(); } catch {} cleanupOverdub(); }
     });
     bindMediaSession();
-    state.initialized = true; refresh(); renderControls(); updateAvailability(); updateRecordModeUi(); setStatus("트랙이 있는 녹음을 선택해 주세요.", "idle");
+    state.initialized = true; refresh(); renderControls(); updateAvailability(); updateRecordModeUi(); setStatus("MR을 가져오거나 기존 녹음 세션을 선택해 주세요.", "idle");
   }
 
   function isPlaying() { return state.playing; }

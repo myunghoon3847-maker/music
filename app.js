@@ -122,6 +122,8 @@ const state = {
 const NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const RECORDING_DB_NAME = "hoonMusicRecordingsDB";
 const RECORDING_STORE_NAME = "recordings";
+const MIXER_BACKUP_STORE_NAME = "mixerBackups";
+const RECORDING_DB_VERSION = 2;
 const MAX_RECORDING_MS = 30 * 60 * 1000;
 const DEFAULT_MR_SYNC_MS = 0;
 const MIN_MR_SYNC_MS = -800;
@@ -374,7 +376,7 @@ const TAB_LABELS = {
   chords: "코드 진행",
   vocalTune: "보컬튠",
   recording: "녹음실",
-  mixer: "멀티트랙 믹서",
+  mixer: "녹음·믹서",
   metronome: "메트로놈",
   tuner: "튜너"
 };
@@ -2433,15 +2435,25 @@ function openRecordingDb() {
       reject(new Error("이 브라우저는 녹음 저장 기능을 지원하지 않습니다."));
       return;
     }
-    const request = indexedDB.open(RECORDING_DB_NAME, 1);
+    const request = indexedDB.open(RECORDING_DB_NAME, RECORDING_DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(RECORDING_STORE_NAME)) {
         const store = db.createObjectStore(RECORDING_STORE_NAME, { keyPath: "id", autoIncrement: true });
         store.createIndex("createdAt", "createdAt");
       }
+      if (!db.objectStoreNames.contains(MIXER_BACKUP_STORE_NAME)) {
+        const backupStore = db.createObjectStore(MIXER_BACKUP_STORE_NAME, { keyPath: "backupId" });
+        backupStore.createIndex("recordingId", "recordingId");
+        backupStore.createIndex("createdAt", "createdAt");
+      }
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const db = request.result;
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
+    request.onblocked = () => reject(new Error("이전 버전의 훈뮤직툴 탭이 저장소를 사용 중입니다. 열린 앱 탭을 모두 닫고 다시 실행해 주세요."));
     request.onerror = () => reject(request.error || new Error("녹음 저장소를 열지 못했습니다."));
   });
   return state.recordingDbPromise;
@@ -2474,6 +2486,80 @@ async function putStoredRecording(recording) {
     const request = transaction.objectStore(RECORDING_STORE_NAME).put(recording);
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error("녹음 정보를 수정하지 못했습니다."));
+  });
+}
+
+async function getMixerBackups(recordingId) {
+  const db = await openRecordingDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(MIXER_BACKUP_STORE_NAME, "readonly");
+    const request = transaction.objectStore(MIXER_BACKUP_STORE_NAME).getAll();
+    request.onsuccess = () => resolve((request.result || [])
+      .filter((entry) => String(entry.recordingId) === String(recordingId))
+      .sort((a, b) => Number(b.createdAt) - Number(a.createdAt)));
+    request.onerror = () => reject(request.error || new Error("편집 복구 저장본을 불러오지 못했습니다."));
+  });
+}
+
+async function saveMixerBackup(recording, reason = "자동 저장 전") {
+  if (!recording?.id || !recording.mixSettings) return null;
+  const db = await openRecordingDb();
+  const backup = {
+    backupId: `${recording.id}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+    recordingId: recording.id,
+    createdAt: Date.now(),
+    reason,
+    mixSettings: structuredClone(recording.mixSettings)
+  };
+  await new Promise((resolve, reject) => {
+    const transaction = db.transaction(MIXER_BACKUP_STORE_NAME, "readwrite");
+    const request = transaction.objectStore(MIXER_BACKUP_STORE_NAME).put(backup);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error || new Error("편집 복구 저장본을 만들지 못했습니다."));
+  });
+  const backups = await getMixerBackups(recording.id);
+  const stale = backups.slice(10);
+  if (stale.length) {
+    await new Promise((resolve) => {
+      const transaction = db.transaction(MIXER_BACKUP_STORE_NAME, "readwrite");
+      const store = transaction.objectStore(MIXER_BACKUP_STORE_NAME);
+      stale.forEach((entry) => store.delete(entry.backupId));
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => resolve();
+    });
+  }
+  return backup;
+}
+
+async function getLatestMixerBackup(recordingId) {
+  return (await getMixerBackups(recordingId))[0] || null;
+}
+async function deleteMixerBackups(recordingId) {
+  const backups = await getMixerBackups(recordingId);
+  if (!backups.length) return;
+  const db = await openRecordingDb();
+  await new Promise((resolve) => {
+    const transaction = db.transaction(MIXER_BACKUP_STORE_NAME, "readwrite");
+    const store = transaction.objectStore(MIXER_BACKUP_STORE_NAME);
+    backups.forEach((entry) => store.delete(entry.backupId));
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => resolve();
+  });
+}
+
+
+async function restoreMixerBackup(recording, backup) {
+  return enqueueMixerRecordingWrite(recording.id, async () => {
+    const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+    if (latest.mixSettings) {
+      try { await saveMixerBackup(latest, "복구 실행 전 현재 상태"); }
+      catch (error) { console.warn("복구 전 백업 생성 실패", error); }
+    }
+    const updated = { ...latest, mixSettings: structuredClone(backup.mixSettings || {}), updatedAt: Date.now() };
+    if (!latest.volatile) await putStoredRecording(updated);
+    state.recordings = state.recordings.map((entry) => entry.id === latest.id ? updated : entry);
+    renderRecordings();
+    return updated;
   });
 }
 
@@ -2931,6 +3017,12 @@ async function loadRecordings() {
       return updated;
     });
     if (migrated.length) await Promise.allSettled(migrated.map((recording) => putStoredRecording(recording)));
+    let initialBackupDone = false;
+    try { initialBackupDone = localStorage.getItem("hoonMixerRecoverySnapshot1963") === "1"; } catch {}
+    if (!initialBackupDone) {
+      await Promise.allSettled(state.recordings.filter((recording) => recording.mixSettings).map((recording) => saveMixerBackup(recording, "v1.9.6.3 최초 안전 백업")));
+      try { localStorage.setItem("hoonMixerRecoverySnapshot1963", "1"); } catch {}
+    }
     renderProjectUi();
     renderRecordings();
   } catch (error) {
@@ -3599,9 +3691,15 @@ function enqueueMixerRecordingWrite(recordingId, task) {
 async function saveMixerSettings(recording, mixSettings) {
   return enqueueMixerRecordingWrite(recording.id, async () => {
     const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
-    const updated = { ...latest, mixSettings, updatedAt: Date.now() };
-    if (!recording.volatile) await putStoredRecording(updated);
-    state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+    if (latest.mixSettings) {
+      try { await saveMixerBackup(latest, "믹서 자동 저장 전"); }
+      catch (error) { console.warn("믹서 편집 백업 생성 실패", error); }
+    }
+    const previous = latest.mixSettings && typeof latest.mixSettings === "object" ? latest.mixSettings : {};
+    const mergedSettings = { ...structuredClone(previous), ...structuredClone(mixSettings || {}) };
+    const updated = { ...latest, mixSettings: mergedSettings, updatedAt: Date.now() };
+    if (!latest.volatile) await putStoredRecording(updated);
+    state.recordings = state.recordings.map((entry) => entry.id === latest.id ? updated : entry);
     return updated;
   });
 }
@@ -3684,6 +3782,71 @@ async function recordMixerExport(recording, exportInfo) {
   }
 }
 
+async function renameMixerSession(recording, name) {
+  return enqueueMixerRecordingWrite(recording.id, async () => {
+    const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+    const updated = { ...latest, name: safeRecordingFilename(name).slice(0, 60), updatedAt: Date.now() };
+    if (!latest.volatile) await putStoredRecording(updated);
+    state.recordings = state.recordings.map((entry) => entry.id === latest.id ? updated : entry);
+    renderRecordings();
+    return updated;
+  });
+}
+
+async function deleteMixerSession(recording) {
+  return enqueueMixerRecordingWrite(recording.id, async () => {
+    if (!recording.volatile) await deleteStoredRecording(recording.id);
+    await deleteMixerBackups(recording.id);
+    state.recordings = state.recordings.filter((entry) => entry.id !== recording.id);
+    renderProjectUi();
+    renderRecordings();
+    return true;
+  });
+}
+
+async function createMixerSessionFromMr(file) {
+  if (!(file instanceof Blob)) throw new Error("MR 오디오 파일을 선택해 주세요.");
+  const now = Date.now();
+  const baseName = String(file.name || "새 MR")
+    .replace(/\.[^.]+$/, "")
+    .replace(/[\/:*?"<>|]/g, "-")
+    .trim() || "새 MR";
+  const vocalTrackId = globalThis.crypto?.randomUUID?.() || `vocal-${now}-${Math.random().toString(36).slice(2, 8)}`;
+  const record = {
+    name: baseName,
+    memo: "믹서에서 MR을 가져와 만든 녹음 세션",
+    projectId: currentProjectId(),
+    createdAt: now,
+    updatedAt: now,
+    durationMs: 0,
+    mimeType: file.type || "audio/mpeg",
+    hasMr: true,
+    hasMrTrack: true,
+    hasSeparatedTracks: true,
+    trackVersion: 4,
+    mrName: file.name || `${baseName}.audio`,
+    mrMimeType: file.type || "audio/mpeg",
+    mrDurationMs: 0,
+    syncOffsetMs: 0,
+    vocalMimeType: "",
+    vocalBlob: null,
+    mrBlob: file,
+    extraTracks: [{ id: vocalTrackId, name: "보컬 1", createdAt: now }],
+    blob: file
+  };
+  try {
+    const id = await addStoredRecording(record);
+    const updated = { ...record, id };
+    state.recordings.unshift(updated);
+    window.HoonProjects?.touch?.(record.projectId);
+    renderProjectUi();
+    renderRecordings();
+    return updated;
+  } catch (error) {
+    throw new Error(`${error.message} 브라우저 저장 공간을 확인해 주세요.`);
+  }
+}
+
 function stopAudioForMixer() {
   stopMetronome();
   stopProgression();
@@ -3700,6 +3863,11 @@ function setupMixer() {
     getRecordings: () => visibleRecordings(),
     getAudioContext: ensureAudioContext,
     saveSettings: saveMixerSettings,
+    getLatestBackup: getLatestMixerBackup,
+    restoreBackup: restoreMixerBackup,
+    createSessionFromMr: createMixerSessionFromMr,
+    renameSession: renameMixerSession,
+    deleteSession: deleteMixerSession,
     createEmptyTrack: createMixerEmptyTrack,
     updateExtraTrack: updateMixerExtraTrack,
     removeExtraTrack: removeMixerExtraTrack,
@@ -3754,7 +3922,7 @@ function activateTab(target, { stopAudio = true } = {}) {
   const status = target === "recording"
     ? `${window.HoonProjects?.getCurrent?.()?.name || "기본 프로젝트"} · 준비`
     : target === "mixer"
-      ? "2트랙 녹음을 선택하세요"
+      ? "MR을 가져오거나 녹음 세션을 선택하세요"
       : "준비됨";
   transportUpdate(TAB_LABELS[target] || "훈뮤직툴", status, false, "idle");
 }
@@ -3827,14 +3995,9 @@ async function transportPlayPause() {
 }
 
 function transportRecord() {
-  if (state.currentTab === "mixer") {
-    if (window.HoonMixer?.isRecording?.()) window.HoonMixer?.finishOverdub?.();
-    else window.HoonMixer?.startOverdub?.({ fromTransport: true });
-    return;
-  }
-  activateTab("recording");
-  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") stopRecording();
-  else startRecording();
+  if (state.currentTab !== "mixer") activateTab("mixer", { stopAudio: false });
+  if (window.HoonMixer?.isRecording?.()) window.HoonMixer?.finishOverdub?.();
+  else window.HoonMixer?.startOverdub?.({ fromTransport: true });
 }
 
 function setupTransport() {

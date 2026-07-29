@@ -2,7 +2,7 @@
   "id": "./",
   "name": "훈뮤직툴 Studio - 음악 작업실",
   "short_name": "훈뮤직툴",
-  "description": "트랙 단축키, 빈 구간 추가 녹음, 클립 트랙 이동, 펀치 인 녹음과 WAV 믹스 내보내기를 제공하는 개인용 음악 제작 도구",
+  "description": "MR 가져오기, 믹서 내부 녹음, 편집 데이터 복구, 클립 이동과 WAV 내보내기를 제공하는 개인용 음악 제작 도구",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
