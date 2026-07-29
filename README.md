@@ -1,29 +1,27 @@
-# 훈뮤직툴 v1.9.5 고정 트랙 컨트롤·타임라인 개선
+# Lumen AI v1.6.1 — API Stability Fix
 
-PC·모바일에서 사용하는 개인용 음악 작업 웹앱입니다.
+## 수정 내용
+- `/api/write`가 없거나 HTML 오류 페이지를 반환할 때 원인을 정확히 안내
+- `OPENAI_API_KEY` 누락, 인증, 사용 한도, 모델 오류, 시간 초과 메시지 구분
+- 기본 모델 실패 시 호환 모델로 자동 재시도
+- `/api/health` 배포 상태 확인 엔드포인트 추가
+- API 응답 캐시 방지
+- PWA 캐시 버전 갱신
 
-## v1.9.5 핵심 변경
+## Vercel 환경 변수
+- 필수: `OPENAI_API_KEY`
+- 선택: `OPENAI_MODEL`
 
-- 믹서 타임라인 왼쪽에 트랙 이름과 M(음소거)·S(솔로)·▶(개별 듣기)·●(녹음 대상) 버튼 고정
-- 화면을 아래로 내리지 않고 각 트랙 음량과 상태를 바로 조작
-- 재생·일시정지·정지·원본 비교 버튼을 작은 아이콘으로 축소
-- 분할된 클립 하나만 독립적으로 음소거하고 WAV 내보내기에도 반영
-- 타임라인 아래 손잡이를 드래그해 편집창 높이 조절
-- Ctrl+마우스 휠로 가로·세로 파형을 같은 비율로 확대·축소
-- Shift+마우스 휠로 타임라인 좌우 이동
-- 확대 중심을 마우스 위치에 유지하고 타임라인 높이를 기기별로 저장
+환경 변수를 추가하거나 수정한 뒤에는 반드시 Redeploy 하세요.
 
-## 실행
+## 확인 주소
+배포 주소 뒤에 `/api/health`를 붙여 열었을 때 아래와 비슷한 JSON이 나오면 API 배포가 정상입니다.
 
-PC에서는 `훈뮤직툴 실행.bat`을 실행합니다. 마이크와 PWA 기능은 로컬 서버 또는 HTTPS 배포 환경에서 가장 안정적입니다.
+```json
+{"ok":true,"apiKeyConfigured":true,"model":"automatic"}
+```
 
-## 믹서 빠른 조작
 
-- `M`: 해당 트랙 전체 음소거
-- `S`: 해당 트랙 솔로
-- `▶`: 해당 트랙만 듣기
-- `●`: 추가 트랙을 녹음 대상으로 선택
-- 클립 내부 `M`: 선택 클립만 음소거
-- `Ctrl + 휠`: 가로·세로 비례 확대
-- `Shift + 휠`: 좌우 이동
-- 타임라인 아래 손잡이: 편집창 높이 조절
+## v1.6.2 deployment fix
+- Replaced individual function patterns with `api/*.js` to prevent Vercel UNMATCHED_FUNCTION_PATTERN build failures.
+- Both `/api/write` and `/api/health` are automatically detected from the root `api` directory.
