@@ -2646,8 +2646,13 @@ async function putRecordingAtomically(updated, previous = null, reason = "안전
     ? [RECORDING_STORE_NAME, MIXER_BACKUP_STORE_NAME]
     : [RECORDING_STORE_NAME];
   const transaction = db.transaction(stores, "readwrite");
-  if (backupSource) transaction.objectStore(MIXER_BACKUP_STORE_NAME).put(mixerBackupPayload(backupSource, previous?.mixSettings ? reason : "첫 편집 안전 지점"));
-  transaction.objectStore(RECORDING_STORE_NAME).put(updated);
+  try {
+    if (backupSource) transaction.objectStore(MIXER_BACKUP_STORE_NAME).put(mixerBackupPayload(backupSource, previous?.mixSettings ? reason : "첫 편집 안전 지점"));
+    transaction.objectStore(RECORDING_STORE_NAME).put(updated);
+  } catch (error) {
+    try { transaction.abort(); } catch {}
+    throw error;
+  }
   await transactionComplete(transaction, "녹음 세션을 안전하게 저장하지 못했습니다.");
   if (backupSource) pruneMixerBackups(updated.id).catch(() => {});
   return updated;
@@ -2659,6 +2664,9 @@ async function verifyStoredRecording(updated, options = {}) {
   if (!verified) throw new Error("저장한 녹음 세션을 다시 찾지 못했습니다.");
   if (Number(verified.dataRevision) !== Number(updated.dataRevision)) throw new Error("저장 버전 검증에 실패했습니다.");
   if (updated.mixChecksum && verified.mixChecksum !== updated.mixChecksum) throw new Error("편집 체크섬 검증에 실패했습니다.");
+  if (updated.mixChecksum && checksumText(verified.mixSettings || {}) !== verified.mixChecksum) {
+    throw new Error("저장된 편집 데이터와 체크섬이 일치하지 않습니다.");
+  }
   if (options.trackId) {
     const track = (Array.isArray(verified.extraTracks) ? verified.extraTracks : []).find((entry) => String(entry.id) === String(options.trackId));
     if (!track) throw new Error("저장한 녹음 트랙을 다시 찾지 못했습니다.");
@@ -4340,6 +4348,9 @@ async function updateMixerExtraTrack(recording, trackId, patch, options = {}) {
       mixSettings = { ...mixSettings };
       delete mixSettings[`extra:${trackId}`];
     }
+    const mixChecksum = options.resetMix && mixSettings
+      ? checksumText(mixSettings)
+      : latest.mixChecksum;
     const updated = {
       ...latest,
       extraTracks,
@@ -4347,12 +4358,14 @@ async function updateMixerExtraTrack(recording, trackId, patch, options = {}) {
       trackVersion: Math.max(4, Number(latest.trackVersion) || 0),
       safetyVersion: 2,
       dataRevision: (Number(latest.dataRevision) || 0) + 1,
+      mixChecksum,
       updatedAt: Date.now(),
       lastSavedAt: Date.now()
     };
     if (!recording.volatile) {
       await putRecordingAtomically(updated, latest, "트랙 녹음 저장 전");
       if (patch.blob instanceof Blob) await verifyStoredRecording(updated, { trackId, minBlobSize: patch.blob.size });
+      else if (options.resetMix) await verifyStoredRecording(updated);
     }
     state.recordings = state.recordings.map((entry) => String(entry.id) === String(recording.id) ? updated : entry);
     window.HoonProjects?.touch?.(updated.projectId);
