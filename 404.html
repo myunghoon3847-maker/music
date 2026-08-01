@@ -14,7 +14,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=1964" />
+  <link rel="stylesheet" href="styles.css?v=1950" />
 </head>
 <body>
   <div class="app-shell">
@@ -43,7 +43,8 @@
     <nav class="tabs" aria-label="주요 기능">
       <button class="tab is-active" data-tab="chords" aria-selected="true">코드</button>
       <button class="tab" data-tab="vocalTune" aria-selected="false">보컬튠</button>
-      <button class="tab" data-tab="mixer" aria-selected="false">녹음·믹서</button>
+      <button class="tab" data-tab="recording" aria-selected="false">녹음</button>
+      <button class="tab" data-tab="mixer" aria-selected="false">믹서</button>
       <button class="tab" data-tab="metronome" aria-selected="false">메트로놈</button>
       <button class="tab" data-tab="tuner" aria-selected="false">튜너</button>
     </nav>
@@ -295,7 +296,7 @@
       </section>
 
 
-      <section id="recording" class="panel legacy-recording-panel" aria-labelledby="recording-page-title" hidden aria-hidden="true">
+      <section id="recording" class="panel" aria-labelledby="recording-page-title">
         <div class="card recording-card">
           <div class="section-heading recording-page-heading">
             <div>
@@ -441,71 +442,33 @@
         <div class="card mixer-card">
           <div class="section-heading mixer-heading">
             <div>
-              <p class="section-kicker">RECORDING · MULTI TRACK MIXER</p>
-              <h2 id="mixer-title">녹음·믹서</h2>
+              <p class="section-kicker">MULTI TRACK MIXER</p>
+              <h2 id="mixer-title">보컬·MR 믹서</h2>
             </div>
             <div class="mixer-heading-status">
               <span id="mixerSaveState" class="mixer-save-state" data-state="saved">저장됨</span>
-              <button id="mixerSaveRetry" class="mixer-save-retry" type="button" hidden>다시 저장</button>
               <span id="mixerStatusBadge" class="mixer-status-badge" data-mode="idle">준비</span>
             </div>
           </div>
 
-          <div class="mixer-toolbar mixer-session-toolbar">
+          <div class="mixer-toolbar">
             <label class="mixer-recording-field">
-              <span>현재 녹음 세션</span>
+              <span>현재 프로젝트 녹음</span>
               <select id="mixerRecordingSelect">
-                <option value="">세션을 선택하세요</option>
+                <option value="">녹음을 선택하세요</option>
               </select>
             </label>
-            <div class="mixer-session-create">
-              <input id="mixerMrImportInput" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm" hidden />
-              <button id="mixerImportMr" class="secondary-btn" type="button">MR 가져오기</button>
-              <span id="mixerImportMrStatus" class="mixer-import-status">MR을 가져오면 보컬 트랙이 자동 생성됩니다.</span>
-              <div class="mixer-session-actions">
-                <button id="mixerRenameSession" class="mixer-mini-action" type="button" disabled>이름 변경</button>
-                <button id="mixerDeleteSession" class="mixer-mini-action is-danger" type="button" disabled>세션 삭제</button>
-              </div>
-            </div>
             <div class="mixer-toolbar-actions">
               <button id="mixerUndo" class="secondary-btn mixer-control" type="button" disabled aria-label="실행 취소">↶ 취소</button>
               <button id="mixerRedo" class="secondary-btn mixer-control" type="button" disabled aria-label="다시 실행">↷ 다시</button>
-              <button id="mixerRecovery" class="secondary-btn" type="button" disabled title="최근 믹서 편집 저장본 복구">편집 복구</button>
               <button id="mixerReset" class="secondary-btn mixer-control" type="button" disabled>전체 초기화</button>
             </div>
-          </div>
-          <div class="mixer-safety-toolbar" aria-label="녹음과 편집 저장 보호">
-            <div class="mixer-safety-status">
-              <strong>저장 안전</strong>
-              <span id="mixerStorageStatus">저장 공간 확인 중</span>
-            </div>
-            <div class="mixer-safety-actions">
-              <button id="mixerPersistStorage" class="mixer-mini-action" type="button">저장 보호 켜기</button>
-              <button id="mixerCheckpoint" class="mixer-mini-action" type="button" disabled>안전 저장</button>
-              <button id="mixerExportSessionBackup" class="mixer-mini-action" type="button" disabled>세션 백업</button>
-              <input id="mixerImportSessionBackupInput" type="file" accept=".hoonmusic,application/x-hoonmusic" hidden />
-              <button id="mixerImportSessionBackup" class="mixer-mini-action" type="button">백업 불러오기</button>
-            </div>
-          </div>
-          <div id="mixerDraftNotice" class="mixer-draft-notice" hidden>
-            <div>
-              <strong>미완료 녹음이 발견되었습니다</strong>
-              <span id="mixerDraftMessage">브라우저가 종료되기 전까지 저장된 녹음 조각을 복구할 수 있습니다.</span>
-            </div>
-            <div>
-              <button id="mixerRecoverDraft" class="secondary-btn" type="button">녹음 복구</button>
-              <button id="mixerDiscardDraft" class="text-btn" type="button">삭제</button>
-            </div>
-          </div>
-          <div id="mixerRecoveryNotice" class="mixer-recovery-notice" hidden>
-            <strong>편집 데이터 보호 모드</strong>
-            <span id="mixerRecoveryMessage">저장된 클립을 안전하게 다시 읽고 있습니다.</span>
           </div>
 
           <div class="mixer-meta">
             <div>
               <strong id="mixerRecordingTitle">녹음을 선택해 주세요</strong>
-              <p id="mixerRecordingMemo">MR을 가져오고 보컬을 녹음한 뒤 같은 화면에서 편집합니다.</p>
+              <p id="mixerRecordingMemo">저장된 트랙을 앱 안에서 바로 재생하고 조절합니다.</p>
             </div>
             <div class="mixer-master-wrap">
               <label class="mixer-master-control">
@@ -541,7 +504,7 @@
               </div>
             </div>
             <div class="mixer-clip-toolbar" aria-label="클립 편집 도구">
-              <button id="mixerSplitClip" class="secondary-btn mixer-control" type="button" disabled aria-keyshortcuts="K" title="선택 클립 분할 · K">분할 <kbd>K</kbd></button>
+              <button id="mixerSplitClip" class="secondary-btn mixer-control" type="button" disabled>분할 <kbd>S</kbd></button>
               <button id="mixerMuteClip" class="secondary-btn mixer-icon-tool mixer-control" type="button" disabled aria-pressed="false" aria-label="선택 클립 음소거" title="선택 클립 음소거"><span aria-hidden="true">🔇</span><span class="sr-only">클립 음소거</span></button>
               <button id="mixerDeleteClip" class="secondary-btn is-danger mixer-control" type="button" disabled>클립 삭제</button>
               <span class="mixer-tool-divider" aria-hidden="true"></span>
@@ -559,7 +522,7 @@
               </div>
             </div>
             <button id="mixerTimelineResizeHandle" class="mixer-timeline-resize-handle" type="button" aria-label="타임라인 높이 조절" title="위아래로 드래그해 타임라인 높이 조절"><span aria-hidden="true"></span></button>
-            <p class="mixer-timeline-help">선택 트랙 단축키: M 음소거 · S 솔로 · P 트랙만 재생 · R 녹음 · K 클립 분할. 클립은 위아래로 드래그해 다른 트랙으로 옮길 수 있습니다.</p>
+            <p class="mixer-timeline-help">트랙 왼쪽의 M·S·▶·● 버튼으로 화면을 내리지 않고 바로 조작합니다. Ctrl+휠은 가로·세로 비례 확대, Shift+휠은 좌우 이동입니다.</p>
             <div class="mixer-clip-inspector" aria-label="선택한 클립 설정">
               <div class="mixer-clip-inspector-title"><strong>선택한 클립</strong><span id="mixerClipInfo">타임라인에서 클립을 선택해 주세요.</span></div>
               <div class="mixer-clip-inspector-grid">
@@ -570,26 +533,6 @@
                 <label><span>페이드인(s)</span><input id="mixerClipFadeIn" class="mixer-control" type="number" min="0" max="10" step="0.01" value="0" disabled /></label>
                 <label><span>페이드아웃(s)</span><input id="mixerClipFadeOut" class="mixer-control" type="number" min="0" max="10" step="0.01" value="0" disabled /></label>
               </div>
-            </div>
-          </section>
-
-          <section id="mixerQuickTrackInspector" class="mixer-quick-track-inspector" aria-label="선택한 트랙 빠른 조작">
-            <div class="mixer-quick-track-heading">
-              <div>
-                <span class="mixer-track-kicker">SELECTED TRACK</span>
-                <strong id="mixerQuickTrackName">트랙을 선택해 주세요</strong>
-              </div>
-              <div class="mixer-quick-track-actions">
-                <button id="mixerQuickPreview" type="button" disabled aria-keyshortcuts="P" aria-label="선택 트랙만 재생" title="선택 트랙만 재생 · P">▶</button>
-                <button id="mixerQuickMute" type="button" disabled aria-keyshortcuts="M" aria-pressed="false" title="트랙 음소거 · M">M</button>
-                <button id="mixerQuickSolo" type="button" disabled aria-keyshortcuts="S" aria-pressed="false" title="트랙 솔로 · S">S</button>
-                <button id="mixerQuickRecord" class="is-record" type="button" disabled aria-keyshortcuts="R" title="선택한 추가 트랙에 녹음 · R">●</button>
-              </div>
-            </div>
-            <div class="mixer-quick-track-controls">
-              <label><span>음량 <output id="mixerQuickVolumeValue">100%</output></span><input id="mixerQuickVolume" type="range" min="0" max="150" step="1" value="100" disabled /></label>
-              <label><span>팬 <output id="mixerQuickPanValue">C</output></span><input id="mixerQuickPan" type="range" min="-100" max="100" step="1" value="0" disabled /></label>
-              <label><span>위치 <output id="mixerQuickOffsetValue">0ms</output></span><input id="mixerQuickOffset" type="range" min="-1000" max="1000" step="10" value="0" disabled /></label>
             </div>
           </section>
 
@@ -607,19 +550,13 @@
             </div>
           </div>
           <div id="mixerRecordOptions" class="mixer-record-options" hidden>
-            <label><span>녹음 방식</span><select id="mixerRecordMode" disabled><option value="manual">재생선부터 녹음</option><option value="punch">구간 펀치 인</option></select></label>
-            <label><span>시작 위치</span><input id="mixerRecordStartPosition" type="number" min="0" step="0.01" value="0" disabled /><em>초</em></label>
-            <label hidden><span>종료 위치</span><input id="mixerRecordEndPosition" type="number" min="0" step="0.01" value="0" disabled /><em>초</em></label>
+            <label><span>녹음 시작 위치</span><input id="mixerRecordStartPosition" type="number" min="0" step="0.01" value="0" disabled /><em>초</em></label>
             <button id="mixerRecordUsePlayhead" class="secondary-btn" type="button" disabled>현재 재생선</button>
-            <button id="mixerRecordUseLoop" class="secondary-btn" hidden type="button" disabled>반복 구간 사용</button>
-            <label hidden><span>겹침 처리</span><select id="mixerPunchOverlap" disabled><option value="keep">기존 클립 유지</option><option value="mute">겹친 클립 음소거</option><option value="replace">겹친 구간 교체</option></select></label>
-            <label class="mixer-check"><input id="mixerOverdubCountIn" type="checkbox" checked disabled /><span>3초 프리롤·카운트인</span></label>
+            <label class="mixer-check"><input id="mixerOverdubCountIn" type="checkbox" checked disabled /><span>3초 카운트인</span></label>
             <div class="mixer-overdub-level" aria-label="추가 녹음 입력 레벨"><span id="mixerOverdubLevel"></span></div>
           </div>
 
-          <details id="mixerDetailedTracks" class="mixer-detailed-tracks">
-            <summary><span>세부 트랙 설정</span><small>자르기 · 페이드 · 숫자 정밀 조정</small></summary>
-            <div class="mixer-track-grid">
+          <div class="mixer-track-grid">
             <article id="mixerMrRow" class="mixer-track-card is-mr is-unavailable">
               <header>
                 <div><span class="mixer-track-kicker">BACKING TRACK</span><strong>MR 트랙</strong></div>
@@ -684,7 +621,6 @@
           </div>
 
           <div id="mixerExtraTrackGrid" class="mixer-extra-track-grid" aria-live="polite"></div>
-          </details>
 
           <section class="mixer-export-panel" aria-labelledby="mixer-export-title">
             <div class="mixer-subheading">
@@ -862,7 +798,7 @@
           <span id="transportStatus">대기 중</span>
         </div>
       </div>
-      <div class="transport-shortcuts" aria-label="키보드 단축키">Space 전체 재생 · M 음소거 · S 솔로 · P 트랙 재생 · R 녹음 · K 분할</div>
+      <div class="transport-shortcuts" aria-label="키보드 단축키">Space 재생 · R 녹음 · Esc 정지</div>
       <div class="transport-actions">
         <button id="transportPlay" type="button" aria-keyshortcuts="Space" aria-label="재생" title="재생 · Space">▶</button>
         <button id="transportStop" type="button" aria-keyshortcuts="Escape" aria-label="정지" title="정지 · Esc">■</button>
@@ -871,7 +807,7 @@
     </section>
 
     <footer>
-      <p>안전 저장 · 녹음 임시 복구 · v1.9.6.4</p>
+      <p>PC 작업실 · 고정 트랙 컨트롤 · 클립 음소거 · v1.9.5</p>
     </footer>
   </div>
 
@@ -915,13 +851,13 @@
     </section>
   </div>
 
-  <script src="core/projects.js?v=1964" defer></script>
-  <script src="core/transport.js?v=1964" defer></script>
-  <script src="core/timeline.js?v=1964" defer></script>
-  <script src="core/edit-history.js?v=1964" defer></script>
-  <script src="core/waveform.js?v=1964" defer></script>
-  <script src="core/mix-renderer.js?v=1964" defer></script>
-  <script src="core/mixer.js?v=1964" defer></script>
-  <script src="app.js?v=1964" defer></script>
+  <script src="core/projects.js?v=1950" defer></script>
+  <script src="core/transport.js?v=1950" defer></script>
+  <script src="core/timeline.js?v=1950" defer></script>
+  <script src="core/edit-history.js?v=1950" defer></script>
+  <script src="core/waveform.js?v=1950" defer></script>
+  <script src="core/mix-renderer.js?v=1950" defer></script>
+  <script src="core/mixer.js?v=1950" defer></script>
+  <script src="app.js?v=1950" defer></script>
 </body>
 </html>

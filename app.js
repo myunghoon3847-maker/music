@@ -122,14 +122,6 @@ const state = {
 const NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const RECORDING_DB_NAME = "hoonMusicRecordingsDB";
 const RECORDING_STORE_NAME = "recordings";
-const MIXER_BACKUP_STORE_NAME = "mixerBackups";
-const RECORDING_DRAFT_STORE_NAME = "recordingDrafts";
-const RECORDING_DRAFT_CHUNK_STORE_NAME = "recordingDraftChunks";
-const RECORDING_DB_VERSION = 4;
-const MAX_MIXER_BACKUPS = 20;
-const STORAGE_WARNING_FREE_BYTES = 100 * 1024 * 1024;
-const STORAGE_CRITICAL_FREE_BYTES = 20 * 1024 * 1024;
-const SESSION_BACKUP_MAGIC = "HOONMUSIC1\n";
 const MAX_RECORDING_MS = 30 * 60 * 1000;
 const DEFAULT_MR_SYNC_MS = 0;
 const MIN_MR_SYNC_MS = -800;
@@ -382,7 +374,7 @@ const TAB_LABELS = {
   chords: "코드 진행",
   vocalTune: "보컬튠",
   recording: "녹음실",
-  mixer: "녹음·믹서",
+  mixer: "멀티트랙 믹서",
   metronome: "메트로놈",
   tuner: "튜너"
 };
@@ -2441,35 +2433,15 @@ function openRecordingDb() {
       reject(new Error("이 브라우저는 녹음 저장 기능을 지원하지 않습니다."));
       return;
     }
-    const request = indexedDB.open(RECORDING_DB_NAME, RECORDING_DB_VERSION);
+    const request = indexedDB.open(RECORDING_DB_NAME, 1);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(RECORDING_STORE_NAME)) {
         const store = db.createObjectStore(RECORDING_STORE_NAME, { keyPath: "id", autoIncrement: true });
         store.createIndex("createdAt", "createdAt");
       }
-      if (!db.objectStoreNames.contains(MIXER_BACKUP_STORE_NAME)) {
-        const backupStore = db.createObjectStore(MIXER_BACKUP_STORE_NAME, { keyPath: "backupId" });
-        backupStore.createIndex("recordingId", "recordingId");
-        backupStore.createIndex("createdAt", "createdAt");
-      }
-      if (!db.objectStoreNames.contains(RECORDING_DRAFT_STORE_NAME)) {
-        const draftStore = db.createObjectStore(RECORDING_DRAFT_STORE_NAME, { keyPath: "draftId" });
-        draftStore.createIndex("recordingId", "recordingId");
-        draftStore.createIndex("createdAt", "createdAt");
-      }
-      if (!db.objectStoreNames.contains(RECORDING_DRAFT_CHUNK_STORE_NAME)) {
-        const chunkStore = db.createObjectStore(RECORDING_DRAFT_CHUNK_STORE_NAME, { keyPath: "chunkKey" });
-        chunkStore.createIndex("draftId", "draftId");
-        chunkStore.createIndex("sequence", "sequence");
-      }
     };
-    request.onsuccess = () => {
-      const db = request.result;
-      db.onversionchange = () => db.close();
-      resolve(db);
-    };
-    request.onblocked = () => reject(new Error("이전 버전의 훈뮤직툴 탭이 저장소를 사용 중입니다. 열린 앱 탭을 모두 닫고 다시 실행해 주세요."));
+    request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error("녹음 저장소를 열지 못했습니다."));
   });
   return state.recordingDbPromise;
@@ -2485,27 +2457,13 @@ async function getStoredRecordings() {
   });
 }
 
-async function getStoredRecording(id) {
-  const db = await openRecordingDb();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(RECORDING_STORE_NAME, "readonly");
-    const request = transaction.objectStore(RECORDING_STORE_NAME).get(id);
-    request.onsuccess = () => resolve(request.result || null);
-    request.onerror = () => reject(request.error || new Error("녹음 세션을 확인하지 못했습니다."));
-  });
-}
-
 async function addStoredRecording(recording) {
   const db = await openRecordingDb();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(RECORDING_STORE_NAME, "readwrite");
     const request = transaction.objectStore(RECORDING_STORE_NAME).add(recording);
-    let insertedId = null;
-    request.onsuccess = () => { insertedId = request.result; };
+    request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error("녹음 파일을 저장하지 못했습니다."));
-    transaction.oncomplete = () => resolve(insertedId);
-    transaction.onabort = () => reject(transaction.error || new Error("녹음 파일 저장이 완료되기 전에 중단되었습니다."));
-    transaction.onerror = () => reject(transaction.error || new Error("녹음 파일 저장을 완료하지 못했습니다."));
   });
 }
 
@@ -2514,559 +2472,8 @@ async function putStoredRecording(recording) {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(RECORDING_STORE_NAME, "readwrite");
     const request = transaction.objectStore(RECORDING_STORE_NAME).put(recording);
-    let storedId = recording?.id ?? null;
-    request.onsuccess = () => { storedId = request.result; };
+    request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error("녹음 정보를 수정하지 못했습니다."));
-    transaction.oncomplete = () => resolve(storedId);
-    transaction.onabort = () => reject(transaction.error || new Error("녹음 정보 저장이 완료되기 전에 중단되었습니다."));
-    transaction.onerror = () => reject(transaction.error || new Error("녹음 정보 저장을 완료하지 못했습니다."));
-  });
-}
-
-
-function transactionComplete(transaction, fallbackMessage = "저장 작업을 완료하지 못했습니다.") {
-  return new Promise((resolve, reject) => {
-    transaction.oncomplete = () => resolve();
-    transaction.onabort = () => reject(transaction.error || new Error(fallbackMessage));
-    transaction.onerror = () => reject(transaction.error || new Error(fallbackMessage));
-  });
-}
-
-function checksumText(value) {
-  const text = typeof value === "string" ? value : JSON.stringify(value ?? null);
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
-}
-
-function emergencyMirrorKey(recordingId, suffix = "current") {
-  return `hoonMixerEmergency:${recordingId}:${suffix}`;
-}
-
-function countSettingsClips(settings = {}) {
-  return Object.entries(settings || {}).reduce((sum, [key, value]) => key === "masterVolume" ? sum : sum + (Array.isArray(value?.clips) ? value.clips.length : 0), 0);
-}
-
-function getEmergencyMixerMirrors(recordingId) {
-  const result = [];
-  for (const suffix of ["current", "previous"]) {
-    try {
-      const raw = localStorage.getItem(emergencyMirrorKey(recordingId, suffix));
-      if (!raw) continue;
-      const mirror = JSON.parse(raw);
-      if (!mirror?.mixSettings || mirror.checksum !== checksumText(mirror.mixSettings)) continue;
-      result.push({
-        backupId: `emergency:${recordingId}:${suffix}`,
-        recordingId,
-        createdAt: Number(mirror.createdAt) || 0,
-        reason: suffix === "current" ? "브라우저 비상 편집 복사본" : "이전 비상 편집 복사본",
-        dataRevision: Number(mirror.dataRevision) || 0,
-        mixChecksum: mirror.checksum,
-        mixSettings: mirror.mixSettings,
-        extraTrackManifest: Array.isArray(mirror.extraTrackManifest) ? mirror.extraTrackManifest : [],
-        sessionName: mirror.sessionName || "녹음 세션",
-        emergencyMirror: true
-      });
-    } catch {}
-  }
-  return result.sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
-}
-
-function saveEmergencyMixerMirror(recording) {
-  if (!recording?.id || !recording.mixSettings) return;
-  try {
-    const currentKey = emergencyMirrorKey(recording.id, "current");
-    const previousKey = emergencyMirrorKey(recording.id, "previous");
-    const current = localStorage.getItem(currentKey);
-    if (current) localStorage.setItem(previousKey, current);
-    const payload = {
-      createdAt: Date.now(),
-      dataRevision: Number(recording.dataRevision) || 0,
-      checksum: checksumText(recording.mixSettings),
-      mixSettings: recording.mixSettings,
-      sessionName: recording.name || "녹음 세션",
-      extraTrackManifest: (Array.isArray(recording.extraTracks) ? recording.extraTracks : []).map((track) => ({
-        id: track?.id,
-        name: track?.name,
-        sourceOnly: Boolean(track?.sourceOnly),
-        sourceTrackId: track?.sourceTrackId || "",
-        hasBlob: track?.blob instanceof Blob
-      }))
-    };
-    localStorage.setItem(currentKey, JSON.stringify(payload));
-  } catch (error) {
-    console.warn("비상 편집 복사본 저장 실패", error);
-  }
-}
-
-function mixerBackupPayload(recording, reason = "자동 저장 전") {
-  const extraTrackManifest = (Array.isArray(recording?.extraTracks) ? recording.extraTracks : []).map((track) => ({
-    id: track?.id,
-    name: track?.name,
-    sourceOnly: Boolean(track?.sourceOnly),
-    sourceTrackId: track?.sourceTrackId || "",
-    takeType: track?.takeType || "",
-    durationMs: Number(track?.durationMs) || 0,
-    recordedAt: Number(track?.recordedAt) || 0,
-    hasBlob: track?.blob instanceof Blob,
-    blobSize: Number(track?.blob?.size) || 0,
-    mimeType: track?.mimeType || track?.blob?.type || ""
-  }));
-  return {
-    backupId: `${recording.id}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
-    recordingId: recording.id,
-    createdAt: Date.now(),
-    reason,
-    dataRevision: Number(recording.dataRevision) || 0,
-    mixChecksum: recording.mixChecksum || checksumText(recording.mixSettings || {}),
-    mixSettings: structuredClone(recording.mixSettings || {}),
-    extraTrackManifest,
-    sessionName: recording.name || "녹음 세션"
-  };
-}
-
-async function pruneMixerBackups(recordingId, keep = MAX_MIXER_BACKUPS) {
-  const backups = await getMixerBackups(recordingId);
-  const stale = backups.slice(Math.max(1, Number(keep) || MAX_MIXER_BACKUPS));
-  if (!stale.length) return;
-  const db = await openRecordingDb();
-  const transaction = db.transaction(MIXER_BACKUP_STORE_NAME, "readwrite");
-  const store = transaction.objectStore(MIXER_BACKUP_STORE_NAME);
-  stale.forEach((entry) => store.delete(entry.backupId));
-  await transactionComplete(transaction, "오래된 편집 복구본을 정리하지 못했습니다.").catch(() => {});
-}
-
-async function putRecordingAtomically(updated, previous = null, reason = "안전 저장") {
-  const db = await openRecordingDb();
-  const backupSource = previous?.mixSettings ? previous : updated?.mixSettings ? updated : null;
-  const stores = backupSource
-    ? [RECORDING_STORE_NAME, MIXER_BACKUP_STORE_NAME]
-    : [RECORDING_STORE_NAME];
-  const transaction = db.transaction(stores, "readwrite");
-  try {
-    if (backupSource) transaction.objectStore(MIXER_BACKUP_STORE_NAME).put(mixerBackupPayload(backupSource, previous?.mixSettings ? reason : "첫 편집 안전 지점"));
-    transaction.objectStore(RECORDING_STORE_NAME).put(updated);
-  } catch (error) {
-    try { transaction.abort(); } catch {}
-    throw error;
-  }
-  await transactionComplete(transaction, "녹음 세션을 안전하게 저장하지 못했습니다.");
-  if (backupSource) pruneMixerBackups(updated.id).catch(() => {});
-  return updated;
-}
-
-async function verifyStoredRecording(updated, options = {}) {
-  if (updated?.volatile) return updated;
-  const verified = await getStoredRecording(updated.id);
-  if (!verified) throw new Error("저장한 녹음 세션을 다시 찾지 못했습니다.");
-  if (Number(verified.dataRevision) !== Number(updated.dataRevision)) throw new Error("저장 버전 검증에 실패했습니다.");
-  if (updated.mixChecksum && verified.mixChecksum !== updated.mixChecksum) throw new Error("편집 체크섬 검증에 실패했습니다.");
-  if (updated.mixChecksum && checksumText(verified.mixSettings || {}) !== verified.mixChecksum) {
-    throw new Error("저장된 편집 데이터와 체크섬이 일치하지 않습니다.");
-  }
-  if (options.trackId) {
-    const track = (Array.isArray(verified.extraTracks) ? verified.extraTracks : []).find((entry) => String(entry.id) === String(options.trackId));
-    if (!track) throw new Error("저장한 녹음 트랙을 다시 찾지 못했습니다.");
-    if (Number(options.minBlobSize) > 0 && (!(track.blob instanceof Blob) || track.blob.size < Number(options.minBlobSize))) {
-      throw new Error("녹음 원본 파일 크기 검증에 실패했습니다.");
-    }
-  }
-  saveEmergencyMixerMirror(verified);
-  return verified;
-}
-
-async function getStorageSafetyStatus() {
-  let persisted = false;
-  let usage = 0;
-  let quota = 0;
-  try { persisted = Boolean(await navigator.storage?.persisted?.()); } catch {}
-  try {
-    const estimate = await navigator.storage?.estimate?.();
-    usage = Number(estimate?.usage) || 0;
-    quota = Number(estimate?.quota) || 0;
-  } catch {}
-  const free = quota > 0 ? Math.max(0, quota - usage) : 0;
-  return {
-    persisted,
-    usage,
-    quota,
-    free,
-    warning: Boolean(quota && free < STORAGE_WARNING_FREE_BYTES),
-    critical: Boolean(quota && free < STORAGE_CRITICAL_FREE_BYTES)
-  };
-}
-
-async function requestPersistentStorage() {
-  if (!navigator.storage?.persist) return getStorageSafetyStatus();
-  try { await navigator.storage.persist(); } catch {}
-  return getStorageSafetyStatus();
-}
-
-async function beginMixerRecordingDraft(recording, metadata = {}) {
-  if (!recording?.id) throw new Error("녹음 임시 저장을 시작할 세션이 없습니다.");
-  const db = await openRecordingDb();
-  const draft = {
-    draftId: globalThis.crypto?.randomUUID?.() || `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    recordingId: recording.id,
-    projectId: recording.projectId || currentProjectId(),
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    status: "recording",
-    chunkCount: 0,
-    totalBytes: 0,
-    ...structuredClone(metadata || {})
-  };
-  const transaction = db.transaction(RECORDING_DRAFT_STORE_NAME, "readwrite");
-  transaction.objectStore(RECORDING_DRAFT_STORE_NAME).put(draft);
-  await transactionComplete(transaction, "녹음 안전 임시 저장을 시작하지 못했습니다.");
-  return draft;
-}
-
-async function appendMixerRecordingDraftChunk(draftId, sequence, chunk) {
-  if (!draftId || !(chunk instanceof Blob) || !chunk.size) return;
-  const db = await openRecordingDb();
-  const transaction = db.transaction([RECORDING_DRAFT_STORE_NAME, RECORDING_DRAFT_CHUNK_STORE_NAME], "readwrite");
-  const draftStore = transaction.objectStore(RECORDING_DRAFT_STORE_NAME);
-  const chunkStore = transaction.objectStore(RECORDING_DRAFT_CHUNK_STORE_NAME);
-  chunkStore.put({
-    chunkKey: `${draftId}:${String(sequence).padStart(8, "0")}`,
-    draftId,
-    sequence: Number(sequence) || 0,
-    createdAt: Date.now(),
-    size: chunk.size,
-    type: chunk.type || "",
-    chunk
-  });
-  const request = draftStore.get(draftId);
-  request.onsuccess = () => {
-    const draft = request.result;
-    if (!draft) return;
-    draft.chunkCount = Math.max(Number(draft.chunkCount) || 0, (Number(sequence) || 0) + 1);
-    draft.totalBytes = (Number(draft.totalBytes) || 0) + chunk.size;
-    draft.updatedAt = Date.now();
-    draft.lastChunkAt = Date.now();
-    draftStore.put(draft);
-  };
-  await transactionComplete(transaction, "녹음 조각을 임시 저장하지 못했습니다.");
-}
-
-async function getMixerRecordingDrafts(recordingId = null) {
-  const db = await openRecordingDb();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(RECORDING_DRAFT_STORE_NAME, "readonly");
-    const request = transaction.objectStore(RECORDING_DRAFT_STORE_NAME).getAll();
-    request.onsuccess = () => resolve((request.result || [])
-      .filter((draft) => recordingId == null || String(draft.recordingId) === String(recordingId))
-      .sort((a, b) => Number(b.updatedAt || b.createdAt) - Number(a.updatedAt || a.createdAt)));
-    request.onerror = () => reject(request.error || new Error("미완료 녹음 목록을 불러오지 못했습니다."));
-  });
-}
-
-async function getMixerRecordingDraftChunks(draftId) {
-  const db = await openRecordingDb();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(RECORDING_DRAFT_CHUNK_STORE_NAME, "readonly");
-    const request = transaction.objectStore(RECORDING_DRAFT_CHUNK_STORE_NAME).getAll();
-    request.onsuccess = () => resolve((request.result || [])
-      .filter((entry) => String(entry.draftId) === String(draftId))
-      .sort((a, b) => Number(a.sequence) - Number(b.sequence)));
-    request.onerror = () => reject(request.error || new Error("미완료 녹음 조각을 불러오지 못했습니다."));
-  });
-}
-
-async function deleteMixerRecordingDraft(draftId) {
-  if (!draftId) return;
-  const chunks = await getMixerRecordingDraftChunks(draftId).catch(() => []);
-  const db = await openRecordingDb();
-  const transaction = db.transaction([RECORDING_DRAFT_STORE_NAME, RECORDING_DRAFT_CHUNK_STORE_NAME], "readwrite");
-  transaction.objectStore(RECORDING_DRAFT_STORE_NAME).delete(draftId);
-  const chunkStore = transaction.objectStore(RECORDING_DRAFT_CHUNK_STORE_NAME);
-  chunks.forEach((entry) => chunkStore.delete(entry.chunkKey));
-  await transactionComplete(transaction, "녹음 임시 저장을 정리하지 못했습니다.");
-}
-
-async function recoverMixerRecordingDraft(draftId) {
-  const drafts = await getMixerRecordingDrafts();
-  const draft = drafts.find((entry) => String(entry.draftId) === String(draftId));
-  if (!draft) throw new Error("복구할 미완료 녹음을 찾지 못했습니다.");
-  const chunks = await getMixerRecordingDraftChunks(draftId);
-  if (!chunks.length) throw new Error("복구할 녹음 조각이 없습니다.");
-  const blob = new Blob(chunks.map((entry) => entry.chunk), { type: draft.mimeType || chunks[0]?.type || "audio/webm" });
-  const latest = state.recordings.find((entry) => String(entry.id) === String(draft.recordingId));
-  if (!latest) throw new Error("미완료 녹음이 속한 세션을 찾지 못했습니다.");
-  let decodedDuration = 0;
-  try {
-    const buffer = await ensureAudioContext().decodeAudioData((await blob.arrayBuffer()).slice(0));
-    decodedDuration = Number(buffer?.duration) || 0;
-  } catch {}
-  const now = Date.now();
-  const targetTrackId = String(draft.targetTrackId || globalThis.crypto?.randomUUID?.() || `vocal-${now}`);
-  const existing = Array.isArray(latest.extraTracks) ? latest.extraTracks : [];
-  const targetExists = existing.some((track) => String(track.id) === targetTrackId && !track.sourceOnly);
-  const targetTrack = targetExists ? null : { id: targetTrackId, name: draft.targetTrackName || "복구 트랙", createdAt: now };
-  const sourceId = globalThis.crypto?.randomUUID?.() || `recovered-${now}-${Math.random().toString(36).slice(2, 8)}`;
-  const sourceTrack = {
-    id: sourceId,
-    name: `${draft.targetTrackName || "보컬"} · 미완료 녹음 복구`,
-    createdAt: now,
-    recordedAt: now,
-    sourceOnly: true,
-    sourceTrackId: targetTrackId,
-    takeType: "recovered-draft",
-    blob,
-    mimeType: blob.type,
-    durationMs: Math.max(250, Math.round(decodedDuration * 1000)),
-    trimStartMs: Math.max(0, Number(draft.trimStartMs) || 0)
-  };
-  const extraTracks = [...existing, ...(targetTrack ? [targetTrack] : []), sourceTrack];
-  const mixSettings = structuredClone(latest.mixSettings || {});
-  const targetKey = `extra:${targetTrackId}`;
-  const sourceKey = `extra:${sourceId}`;
-  const trackSettings = mixSettings[targetKey] && typeof mixSettings[targetKey] === "object"
-    ? structuredClone(mixSettings[targetKey])
-    : { volume: 1, pan: 0, offsetMs: 0, muted: false, solo: false, fadeIn: 0, fadeOut: 0, trimStartSec: 0, trimEndSec: 0, clipModelVersion: 1, clips: [] };
-  const sourceStartSec = Math.max(0, Number(draft.trimStartMs) / 1000 || 0);
-  const effectiveDuration = Math.max(0.05, (decodedDuration || Math.max(0.25, (Number(draft.updatedAt) - Number(draft.createdAt)) / 1000)) - sourceStartSec);
-  trackSettings.clips = Array.isArray(trackSettings.clips) ? trackSettings.clips : [];
-  trackSettings.clips.push({
-    id: globalThis.crypto?.randomUUID?.() || `clip-${now}-${Math.random().toString(36).slice(2, 8)}`,
-    sourceTrackKey: sourceKey,
-    sourceStartSec,
-    sourceEndSec: sourceStartSec + effectiveDuration,
-    timelineStartSec: Number(draft.clipTimelineStartSec) || 0,
-    volume: 1,
-    fadeIn: 0.008,
-    fadeOut: 0.008,
-    muted: false,
-    name: `${draft.targetTrackName || "보컬"} · 복구`
-  });
-  trackSettings.clipModelVersion = 1;
-  mixSettings[targetKey] = trackSettings;
-  const updated = {
-    ...latest,
-    extraTracks,
-    mixSettings,
-    trackVersion: Math.max(5, Number(latest.trackVersion) || 0),
-    safetyVersion: 2,
-    dataRevision: (Number(latest.dataRevision) || 0) + 1,
-    mixChecksum: checksumText(mixSettings),
-    updatedAt: now,
-    lastSavedAt: now
-  };
-  await putRecordingAtomically(updated, latest, "미완료 녹음 복구 전");
-  await verifyStoredRecording(updated, { trackId: sourceId, minBlobSize: blob.size });
-  await deleteMixerRecordingDraft(draftId);
-  state.recordings = state.recordings.map((entry) => String(entry.id) === String(updated.id) ? updated : entry);
-  renderRecordings();
-  return updated;
-}
-
-async function sha256Blob(blob) {
-  if (!(blob instanceof Blob) || !globalThis.crypto?.subtle) return "";
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
-  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
-}
-
-function sessionBackupSafeName(value) {
-  return String(value || "훈뮤직툴-세션").replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ").trim().slice(0, 80) || "훈뮤직툴-세션";
-}
-
-async function exportMixerSessionBackup(recording) {
-  const latest = state.recordings.find((entry) => String(entry.id) === String(recording?.id)) || recording;
-  if (!latest) throw new Error("백업할 녹음 세션이 없습니다.");
-  const assets = [];
-  const blobIndex = new Map();
-  const addAsset = (blob, label) => {
-    if (!(blob instanceof Blob)) return null;
-    if (blobIndex.has(blob)) return blobIndex.get(blob);
-    const index = assets.length;
-    blobIndex.set(blob, index);
-    assets.push({ blob, label, type: blob.type || "application/octet-stream", size: blob.size });
-    return index;
-  };
-  const recordingMeta = { ...latest };
-  delete recordingMeta.id;
-  delete recordingMeta.blob;
-  delete recordingMeta.mrBlob;
-  delete recordingMeta.vocalBlob;
-  const mainRefs = {
-    blob: addAsset(latest.blob, "mixed"),
-    mrBlob: addAsset(latest.mrBlob, "mr"),
-    vocalBlob: addAsset(latest.vocalBlob, "vocal")
-  };
-  recordingMeta.extraTracks = (Array.isArray(latest.extraTracks) ? latest.extraTracks : []).map((track, index) => {
-    const copy = { ...track, __assetIndex: addAsset(track?.blob, `extra-${index}`) };
-    delete copy.blob;
-    return copy;
-  });
-  recordingMeta.archivedTracks = (Array.isArray(latest.archivedTracks) ? latest.archivedTracks : []).map((track, index) => {
-    const copy = { ...track, __assetIndex: addAsset(track?.blob, `archived-${index}`) };
-    delete copy.blob;
-    return copy;
-  });
-  const assetHashes = [];
-  for (const asset of assets) assetHashes.push(await sha256Blob(asset.blob));
-  const header = {
-    format: "hoon-music-session",
-    version: 1,
-    exportedAt: Date.now(),
-    appVersion: "1.9.6.4",
-    recording: recordingMeta,
-    mainRefs,
-    assets: assets.map(({ label, type, size }, index) => ({ label, type, size, sha256: assetHashes[index] || "" }))
-  };
-  const encoder = new TextEncoder();
-  const magic = encoder.encode(SESSION_BACKUP_MAGIC);
-  const headerBytes = encoder.encode(JSON.stringify(header));
-  const lengthBytes = new Uint8Array(4);
-  new DataView(lengthBytes.buffer).setUint32(0, headerBytes.byteLength, true);
-  const blob = new Blob([magic, lengthBytes, headerBytes, ...assets.map((asset) => asset.blob)], { type: "application/x-hoonmusic" });
-  return { blob, filename: `${sessionBackupSafeName(latest.name)}_${new Date().toISOString().slice(0, 10)}.hoonmusic` };
-}
-
-async function importMixerSessionBackup(file) {
-  if (!(file instanceof Blob)) throw new Error("훈뮤직툴 세션 백업 파일을 선택해 주세요.");
-  const magicBytes = new TextEncoder().encode(SESSION_BACKUP_MAGIC);
-  const prefix = new Uint8Array(await file.slice(0, magicBytes.length + 4).arrayBuffer());
-  if (prefix.length < magicBytes.length + 4 || !magicBytes.every((value, index) => prefix[index] === value)) throw new Error("올바른 .hoonmusic 백업 파일이 아닙니다.");
-  const headerLength = new DataView(prefix.buffer, prefix.byteOffset + magicBytes.length, 4).getUint32(0, true);
-  if (!headerLength || headerLength > 10 * 1024 * 1024) throw new Error("백업 파일 머리말이 손상되었습니다.");
-  const headerStart = magicBytes.length + 4;
-  const header = JSON.parse(new TextDecoder().decode(await file.slice(headerStart, headerStart + headerLength).arrayBuffer()));
-  if (header?.format !== "hoon-music-session" || !header.recording || !Array.isArray(header.assets)) throw new Error("지원하지 않는 세션 백업 형식입니다.");
-  let offset = headerStart + headerLength;
-  const assetBlobs = header.assets.map((asset) => {
-    const size = Math.max(0, Number(asset.size) || 0);
-    const blob = file.slice(offset, offset + size, asset.type || "application/octet-stream");
-    offset += size;
-    return blob;
-  });
-  if (offset > file.size) throw new Error("백업 파일의 오디오 데이터가 일부 누락되었습니다.");
-  for (let index = 0; index < header.assets.length; index += 1) {
-    const expected = String(header.assets[index]?.sha256 || "");
-    if (!expected) continue;
-    const actual = await sha256Blob(assetBlobs[index]);
-    if (actual !== expected) throw new Error(`백업 오디오 ${index + 1}의 무결성 검증에 실패했습니다.`);
-  }
-  const meta = structuredClone(header.recording);
-  const resolveAsset = (index) => Number.isInteger(index) && index >= 0 ? assetBlobs[index] || null : null;
-  meta.blob = resolveAsset(header.mainRefs?.blob);
-  meta.mrBlob = resolveAsset(header.mainRefs?.mrBlob);
-  meta.vocalBlob = resolveAsset(header.mainRefs?.vocalBlob);
-  meta.extraTracks = (Array.isArray(meta.extraTracks) ? meta.extraTracks : []).map((track) => {
-    const copy = { ...track, blob: resolveAsset(track.__assetIndex) };
-    delete copy.__assetIndex;
-    return copy;
-  });
-  meta.archivedTracks = (Array.isArray(meta.archivedTracks) ? meta.archivedTracks : []).map((track) => {
-    const copy = { ...track, blob: resolveAsset(track.__assetIndex) };
-    delete copy.__assetIndex;
-    return copy;
-  });
-  const now = Date.now();
-  const record = {
-    ...meta,
-    name: `${sessionBackupSafeName(meta.name)} · 복구본`,
-    projectId: currentProjectId(),
-    createdAt: now,
-    updatedAt: now,
-    lastSavedAt: now,
-    safetyVersion: 2,
-    dataRevision: 1,
-    mixChecksum: checksumText(meta.mixSettings || {}),
-    integrityWarning: "",
-    volatile: false
-  };
-  const id = await addStoredRecording(record);
-  const updated = { ...record, id };
-  state.recordings.unshift(updated);
-  renderProjectUi();
-  renderRecordings();
-  return updated;
-}
-
-async function getMixerBackups(recordingId) {
-  const db = await openRecordingDb();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(MIXER_BACKUP_STORE_NAME, "readonly");
-    const request = transaction.objectStore(MIXER_BACKUP_STORE_NAME).getAll();
-    request.onsuccess = () => resolve((request.result || [])
-      .filter((entry) => String(entry.recordingId) === String(recordingId))
-      .sort((a, b) => Number(b.createdAt) - Number(a.createdAt)));
-    request.onerror = () => reject(request.error || new Error("편집 복구 저장본을 불러오지 못했습니다."));
-  });
-}
-
-async function saveMixerBackup(recording, reason = "자동 저장 전") {
-  if (!recording?.id || !recording.mixSettings) return null;
-  const db = await openRecordingDb();
-  const backup = mixerBackupPayload(recording, reason);
-  const transaction = db.transaction(MIXER_BACKUP_STORE_NAME, "readwrite");
-  transaction.objectStore(MIXER_BACKUP_STORE_NAME).put(backup);
-  await transactionComplete(transaction, "편집 복구 저장본을 만들지 못했습니다.");
-  await pruneMixerBackups(recording.id);
-  return backup;
-}
-
-async function getLatestMixerBackup(recordingId) {
-  const backups = await getMixerBackups(recordingId);
-  const emergency = getEmergencyMixerMirrors(recordingId);
-  return [...backups, ...emergency].sort((a, b) => Number(b.createdAt) - Number(a.createdAt))[0] || null;
-}
-async function deleteMixerBackups(recordingId) {
-  const backups = await getMixerBackups(recordingId);
-  if (!backups.length) return;
-  const db = await openRecordingDb();
-  await new Promise((resolve) => {
-    const transaction = db.transaction(MIXER_BACKUP_STORE_NAME, "readwrite");
-    const store = transaction.objectStore(MIXER_BACKUP_STORE_NAME);
-    backups.forEach((entry) => store.delete(entry.backupId));
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => resolve();
-  });
-}
-
-
-async function restoreMixerBackup(recording, backup) {
-  return enqueueMixerRecordingWrite(recording.id, async () => {
-    const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
-    if (latest.mixSettings) {
-      try { await saveMixerBackup(latest, "복구 실행 전 현재 상태"); }
-      catch (error) { console.warn("복구 전 백업 생성 실패", error); }
-    }
-    const restoredSettings = structuredClone(backup.mixSettings || {});
-    let extraTracks = [...(Array.isArray(latest.extraTracks) ? latest.extraTracks : [])];
-    let archivedTracks = [...(Array.isArray(latest.archivedTracks) ? latest.archivedTracks : [])];
-    (Array.isArray(backup.extraTrackManifest) ? backup.extraTrackManifest : []).forEach((manifest) => {
-      if (!manifest?.id || extraTracks.some((track) => String(track.id) === String(manifest.id))) return;
-      const archivedIndex = archivedTracks.findIndex((track) => String(track.id) === String(manifest.id));
-      if (archivedIndex < 0) return;
-      const [restoredTrack] = archivedTracks.splice(archivedIndex, 1);
-      extraTracks.push({ ...restoredTrack, archivedAt: null, archivedReason: "" });
-    });
-    const now = Date.now();
-    const updated = {
-      ...latest,
-      extraTracks,
-      archivedTracks,
-      mixSettings: restoredSettings,
-      safetyVersion: 2,
-      dataRevision: (Number(latest.dataRevision) || 0) + 1,
-      mixChecksum: checksumText(restoredSettings),
-      integrityWarning: "",
-      updatedAt: now,
-      lastSavedAt: now
-    };
-    if (!latest.volatile) {
-      await putRecordingAtomically(updated, latest, "복구 실행 전 현재 상태");
-      await verifyStoredRecording(updated);
-    }
-    state.recordings = state.recordings.map((entry) => entry.id === latest.id ? updated : entry);
-    renderRecordings();
-    return updated;
   });
 }
 
@@ -3075,10 +2482,8 @@ async function deleteStoredRecording(id) {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(RECORDING_STORE_NAME, "readwrite");
     const request = transaction.objectStore(RECORDING_STORE_NAME).delete(id);
+    request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error || new Error("녹음 파일을 삭제하지 못했습니다."));
-    transaction.oncomplete = () => resolve();
-    transaction.onabort = () => reject(transaction.error || new Error("녹음 파일 삭제가 완료되기 전에 중단되었습니다."));
-    transaction.onerror = () => reject(transaction.error || new Error("녹음 파일 삭제를 완료하지 못했습니다."));
   });
 }
 
@@ -3087,10 +2492,8 @@ async function clearStoredRecordings() {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(RECORDING_STORE_NAME, "readwrite");
     const request = transaction.objectStore(RECORDING_STORE_NAME).clear();
+    request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error || new Error("녹음 목록을 비우지 못했습니다."));
-    transaction.oncomplete = () => resolve();
-    transaction.onabort = () => reject(transaction.error || new Error("녹음 목록 삭제가 완료되기 전에 중단되었습니다."));
-    transaction.onerror = () => reject(transaction.error || new Error("녹음 목록 삭제를 완료하지 못했습니다."));
   });
 }
 
@@ -3288,9 +2691,8 @@ function renderRecordings() {
     const title = document.createElement("strong");
     title.textContent = recording.name || "보컬 녹음";
     titleLine.appendChild(title);
-    const visibleExtraTracks = (Array.isArray(recording.extraTracks) ? recording.extraTracks : []).filter((track) => !track?.sourceOnly);
     const storedTrackCount = [recording.vocalBlob, recording.mrBlob].filter((blob) => blob instanceof Blob).length
-      + visibleExtraTracks.length;
+      + (Array.isArray(recording.extraTracks) ? recording.extraTracks.length : 0);
     if (storedTrackCount > 0) {
       const tag = document.createElement("span");
       tag.className = "recording-mr-tag is-tracks";
@@ -3323,12 +2725,12 @@ function renderRecordings() {
     const player = createRecordingPlayer(recording, objectUrl);
 
     let trackPanel = null;
-    if (recording.vocalBlob || recording.mrBlob || visibleExtraTracks.length) {
+    if (recording.vocalBlob || recording.mrBlob || (Array.isArray(recording.extraTracks) && recording.extraTracks.length)) {
       trackPanel = document.createElement("details");
       trackPanel.className = "recording-track-panel";
       const summary = document.createElement("summary");
       const trackCount = [recording.vocalBlob, recording.mrBlob].filter((blob) => blob instanceof Blob).length
-        + visibleExtraTracks.length;
+        + (Array.isArray(recording.extraTracks) ? recording.extraTracks.length : 0);
       summary.textContent = `분리 트랙 ${trackCount}개`;
       trackPanel.appendChild(summary);
 
@@ -3368,7 +2770,7 @@ function renderRecordings() {
 
       addTrackRow("보컬 트랙", "마이크 원본", recording.vocalBlob, recording.vocalMimeType, `${recording.name}-보컬`);
       addTrackRow("MR 트랙", recording.mrName || "원본 반주", recording.mrBlob, recording.mrMimeType, `${recording.name}-MR`);
-      visibleExtraTracks.forEach((track, index) => {
+      (Array.isArray(recording.extraTracks) ? recording.extraTracks : []).forEach((track, index) => {
         addTrackRow(track.name || `추가 트랙 ${index + 1}`, "믹서에서 추가 녹음", track.blob, track.mimeType, `${recording.name}-${track.name || `추가트랙-${index + 1}`}`);
       });
 
@@ -3388,7 +2790,7 @@ function renderRecordings() {
     actions.className = "recording-item-actions";
 
     let openMixerButton = null;
-    if (recording.vocalBlob || recording.mrBlob || visibleExtraTracks.length) {
+    if (recording.vocalBlob || recording.mrBlob || (Array.isArray(recording.extraTracks) && recording.extraTracks.length)) {
       openMixerButton = document.createElement("button");
       openMixerButton.type = "button";
       openMixerButton.className = "recording-small-btn is-mixer";
@@ -3522,38 +2924,12 @@ async function loadRecordings() {
     const loaded = await getStoredRecordings();
     const migrated = [];
     state.recordings = loaded.map((recording) => {
-      const actualChecksum = checksumText(recording.mixSettings || {});
-      const checksumMismatch = Boolean(recording.mixChecksum && recording.mixChecksum !== actualChecksum);
-      const emergency = getEmergencyMixerMirrors(recording.id)[0] || null;
-      const emergencyHasMore = Boolean(emergency && (
-        Number(emergency.dataRevision) > Number(recording.dataRevision || 0)
-        || countSettingsClips(emergency.mixSettings) > countSettingsClips(recording.mixSettings || {})
-      ));
-      const warning = checksumMismatch
-        ? "저장된 편집 체크섬이 일치하지 않아 자동 저장을 차단했습니다. 편집 복구를 실행해 주세요."
-        : emergencyHasMore
-          ? "브라우저 비상 편집 복사본이 현재 저장본보다 새롭습니다. 편집 복구를 실행해 주세요."
-          : "";
-      const updated = {
-        ...recording,
-        projectId: recording.projectId || window.HoonProjects?.DEFAULT_ID || "project-default",
-        safetyVersion: Math.max(2, Number(recording.safetyVersion) || 0),
-        dataRevision: Math.max(1, Number(recording.dataRevision) || 0),
-        mixChecksum: checksumMismatch ? recording.mixChecksum : actualChecksum,
-        integrityWarning: warning
-      };
-      if (!recording.volatile && !warning && (
-        !recording.projectId || Number(recording.safetyVersion) < 2 || !recording.dataRevision || !recording.mixChecksum
-      )) migrated.push(updated);
+      if (recording.projectId) return recording;
+      const updated = { ...recording, projectId: window.HoonProjects?.DEFAULT_ID || "project-default" };
+      if (!recording.volatile) migrated.push(updated);
       return updated;
     });
     if (migrated.length) await Promise.allSettled(migrated.map((recording) => putStoredRecording(recording)));
-    let initialBackupDone = false;
-    try { initialBackupDone = localStorage.getItem("hoonMixerRecoverySnapshot1964") === "1"; } catch {}
-    if (!initialBackupDone) {
-      await Promise.allSettled(state.recordings.filter((recording) => recording.mixSettings).map((recording) => saveMixerBackup(recording, "v1.9.6.4 안전 저장 최초 백업")));
-      try { localStorage.setItem("hoonMixerRecoverySnapshot1964", "1"); } catch {}
-    }
     renderProjectUi();
     renderRecordings();
   } catch (error) {
@@ -4207,303 +3583,75 @@ function setupProjects() {
   });
 }
 
-const mixerRecordingWriteQueues = new Map();
-
-function enqueueMixerRecordingWrite(recordingId, task) {
-  const key = String(recordingId || "");
-  const previous = mixerRecordingWriteQueues.get(key) || Promise.resolve();
-  const next = previous.catch(() => {}).then(task);
-  mixerRecordingWriteQueues.set(key, next);
-  return next.finally(() => {
-    if (mixerRecordingWriteQueues.get(key) === next) mixerRecordingWriteQueues.delete(key);
-  });
-}
-
 async function saveMixerSettings(recording, mixSettings) {
-  return enqueueMixerRecordingWrite(recording.id, async () => {
-    const latest = state.recordings.find((entry) => String(entry.id) === String(recording.id)) || recording;
-    const previous = latest.mixSettings && typeof latest.mixSettings === "object" ? latest.mixSettings : {};
-    const mergedSettings = { ...structuredClone(previous), ...structuredClone(mixSettings || {}) };
-    const now = Date.now();
-    const revision = (Number(latest.dataRevision) || 0) + 1;
-    const updated = {
-      ...latest,
-      mixSettings: mergedSettings,
-      safetyVersion: 2,
-      dataRevision: revision,
-      mixChecksum: checksumText(mergedSettings),
-      updatedAt: now,
-      lastSavedAt: now
-    };
-    if (!latest.volatile) {
-      await putRecordingAtomically(updated, latest, "믹서 자동 저장 전");
-      await verifyStoredRecording(updated);
-    }
-    state.recordings = state.recordings.map((entry) => String(entry.id) === String(latest.id) ? updated : entry);
-    return updated;
-  });
+  const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+  const updated = { ...latest, mixSettings, updatedAt: Date.now() };
+  if (!recording.volatile) await putStoredRecording(updated);
+  state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+  return updated;
 }
 
 async function createMixerEmptyTrack(recording, track) {
-  return enqueueMixerRecordingWrite(recording.id, async () => {
-    const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
-    const existing = Array.isArray(latest.extraTracks) ? latest.extraTracks : [];
-    const extraTracks = existing.some((entry) => String(entry.id) === String(track.id)) ? existing : [...existing, track];
-    const updated = {
-      ...latest,
-      extraTracks,
-      trackVersion: Math.max(4, Number(latest.trackVersion) || 0),
-      safetyVersion: 2,
-      dataRevision: (Number(latest.dataRevision) || 0) + 1,
-      updatedAt: Date.now(),
-      lastSavedAt: Date.now()
-    };
-    if (!recording.volatile) {
-      await putRecordingAtomically(updated, latest, "트랙 구조 변경 전");
-      if (track.blob instanceof Blob) await verifyStoredRecording(updated, { trackId: track.id, minBlobSize: track.blob.size });
-    }
-    state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
-    window.HoonProjects?.touch?.(updated.projectId);
-    renderProjectUi();
-    renderRecordings();
-    return updated;
-  });
-}
-
-async function saveMixerPunchTake(recording, take, nextMixSettings) {
-  return enqueueMixerRecordingWrite(recording.id, async () => {
-    const latest = state.recordings.find((entry) => String(entry.id) === String(recording.id)) || recording;
-    const existing = Array.isArray(latest.extraTracks) ? latest.extraTracks : [];
-    const extraTracks = existing.some((entry) => String(entry.id) === String(take.id)) ? existing : [...existing, take];
-    const mixSettings = structuredClone(nextMixSettings || latest.mixSettings || {});
-    const now = Date.now();
-    const updated = {
-      ...latest,
-      extraTracks,
-      mixSettings,
-      trackVersion: Math.max(5, Number(latest.trackVersion) || 0),
-      safetyVersion: 2,
-      dataRevision: (Number(latest.dataRevision) || 0) + 1,
-      mixChecksum: checksumText(mixSettings),
-      updatedAt: now,
-      lastSavedAt: now
-    };
-    if (!latest.volatile) {
-      await putRecordingAtomically(updated, latest, "펀치 녹음 저장 전");
-      await verifyStoredRecording(updated, { trackId: take.id, minBlobSize: take.blob?.size || 0 });
-    }
-    state.recordings = state.recordings.map((entry) => String(entry.id) === String(updated.id) ? updated : entry);
-    window.HoonProjects?.touch?.(updated.projectId);
-    renderRecordings();
-    return updated;
-  });
-}
-
-async function appendMixerRecordedClip(recording, sourceTrack, targetTrackId, clip) {
-  return enqueueMixerRecordingWrite(recording.id, async () => {
-    const latest = state.recordings.find((entry) => String(entry.id) === String(recording.id)) || recording;
-    const existing = Array.isArray(latest.extraTracks) ? latest.extraTracks : [];
-    const extraTracks = existing.some((entry) => String(entry.id) === String(sourceTrack.id)) ? existing : [...existing, sourceTrack];
-    const mixSettings = structuredClone(latest.mixSettings || {});
-    const targetKey = `extra:${targetTrackId}`;
-    const targetSettings = mixSettings[targetKey] && typeof mixSettings[targetKey] === "object"
-      ? structuredClone(mixSettings[targetKey])
-      : { volume: 1, pan: 0, offsetMs: 0, muted: false, solo: false, fadeIn: 0, fadeOut: 0, trimStartSec: 0, trimEndSec: 0, clipModelVersion: 1, clips: [] };
-    targetSettings.clips = Array.isArray(targetSettings.clips) ? targetSettings.clips : [];
-    if (!targetSettings.clips.some((entry) => String(entry.id) === String(clip.id))) targetSettings.clips.push(structuredClone(clip));
-    targetSettings.clips.sort((a, b) => Number(a.timelineStartSec || 0) - Number(b.timelineStartSec || 0));
-    targetSettings.clipModelVersion = 1;
-    mixSettings[targetKey] = targetSettings;
-    const now = Date.now();
-    const updated = {
-      ...latest,
-      extraTracks,
-      mixSettings,
-      trackVersion: Math.max(5, Number(latest.trackVersion) || 0),
-      safetyVersion: 2,
-      dataRevision: (Number(latest.dataRevision) || 0) + 1,
-      mixChecksum: checksumText(mixSettings),
-      updatedAt: now,
-      lastSavedAt: now
-    };
-    if (!latest.volatile) {
-      await putRecordingAtomically(updated, latest, "새 녹음 클립 저장 전");
-      await verifyStoredRecording(updated, { trackId: sourceTrack.id, minBlobSize: sourceTrack.blob?.size || 0 });
-    }
-    state.recordings = state.recordings.map((entry) => String(entry.id) === String(updated.id) ? updated : entry);
-    window.HoonProjects?.touch?.(updated.projectId);
-    renderRecordings();
-    return updated;
-  });
+  const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+  const extraTracks = [...(Array.isArray(latest.extraTracks) ? latest.extraTracks : []), track];
+  const updated = {
+    ...latest,
+    extraTracks,
+    trackVersion: Math.max(4, Number(latest.trackVersion) || 0),
+    updatedAt: Date.now()
+  };
+  if (!recording.volatile) await putStoredRecording(updated);
+  state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+  window.HoonProjects?.touch?.(updated.projectId);
+  renderProjectUi();
+  renderRecordings();
+  return updated;
 }
 
 async function updateMixerExtraTrack(recording, trackId, patch, options = {}) {
-  return enqueueMixerRecordingWrite(recording.id, async () => {
-    const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
-    const extraTracks = (Array.isArray(latest.extraTracks) ? latest.extraTracks : []).map((track) =>
-      String(track.id) === String(trackId) ? { ...track, ...patch, id: track.id, updatedAt: Date.now() } : track
-    );
-    let mixSettings = latest.mixSettings ? { ...latest.mixSettings } : latest.mixSettings;
-    if (options.resetMix && mixSettings) {
-      mixSettings = { ...mixSettings };
-      delete mixSettings[`extra:${trackId}`];
-    }
-    const mixChecksum = options.resetMix && mixSettings
-      ? checksumText(mixSettings)
-      : latest.mixChecksum;
-    const updated = {
-      ...latest,
-      extraTracks,
-      mixSettings,
-      trackVersion: Math.max(4, Number(latest.trackVersion) || 0),
-      safetyVersion: 2,
-      dataRevision: (Number(latest.dataRevision) || 0) + 1,
-      mixChecksum,
-      updatedAt: Date.now(),
-      lastSavedAt: Date.now()
-    };
-    if (!recording.volatile) {
-      await putRecordingAtomically(updated, latest, "트랙 녹음 저장 전");
-      if (patch.blob instanceof Blob) await verifyStoredRecording(updated, { trackId, minBlobSize: patch.blob.size });
-      else if (options.resetMix) await verifyStoredRecording(updated);
-    }
-    state.recordings = state.recordings.map((entry) => String(entry.id) === String(recording.id) ? updated : entry);
-    window.HoonProjects?.touch?.(updated.projectId);
-    renderProjectUi();
-    renderRecordings();
-    return updated;
-  });
+  const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+  const extraTracks = (Array.isArray(latest.extraTracks) ? latest.extraTracks : []).map((track) =>
+    String(track.id) === String(trackId) ? { ...track, ...patch, id: track.id, updatedAt: Date.now() } : track
+  );
+  let mixSettings = latest.mixSettings ? { ...latest.mixSettings } : latest.mixSettings;
+  if (options.resetMix && mixSettings) {
+    mixSettings = { ...mixSettings };
+    delete mixSettings[`extra:${trackId}`];
+  }
+  const updated = {
+    ...latest,
+    extraTracks,
+    mixSettings,
+    trackVersion: Math.max(4, Number(latest.trackVersion) || 0),
+    updatedAt: Date.now()
+  };
+  if (!recording.volatile) await putStoredRecording(updated);
+  state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+  window.HoonProjects?.touch?.(updated.projectId);
+  renderProjectUi();
+  renderRecordings();
+  return updated;
 }
 
 async function removeMixerExtraTrack(recording, trackId) {
-  return enqueueMixerRecordingWrite(recording.id, async () => {
-    const latest = state.recordings.find((entry) => String(entry.id) === String(recording.id)) || recording;
-    const existing = Array.isArray(latest.extraTracks) ? latest.extraTracks : [];
-    const removed = existing.find((track) => String(track.id) === String(trackId));
-    const extraTracks = existing.filter((track) => String(track.id) !== String(trackId));
-    const archivedTracks = removed
-      ? [...(Array.isArray(latest.archivedTracks) ? latest.archivedTracks : []), { ...removed, archivedAt: Date.now(), archivedReason: "사용자 트랙 삭제" }]
-      : (Array.isArray(latest.archivedTracks) ? latest.archivedTracks : []);
-    let mixSettings = latest.mixSettings ? { ...latest.mixSettings } : latest.mixSettings;
-    if (mixSettings) {
-      mixSettings = { ...mixSettings };
-      delete mixSettings[`extra:${trackId}`];
-    }
-    const now = Date.now();
-    const updated = {
-      ...latest,
-      extraTracks,
-      archivedTracks,
-      mixSettings,
-      safetyVersion: 2,
-      dataRevision: (Number(latest.dataRevision) || 0) + 1,
-      mixChecksum: checksumText(mixSettings || {}),
-      updatedAt: now,
-      lastSavedAt: now
-    };
-    if (!recording.volatile) await putRecordingAtomically(updated, latest, "트랙 삭제 전");
-    state.recordings = state.recordings.map((entry) => String(entry.id) === String(recording.id) ? updated : entry);
-    renderRecordings();
-    return updated;
-  });
+  const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+  const extraTracks = (Array.isArray(latest.extraTracks) ? latest.extraTracks : []).filter((track) => String(track.id) !== String(trackId));
+  const updated = { ...latest, extraTracks, updatedAt: Date.now() };
+  if (!recording.volatile) await putStoredRecording(updated);
+  state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
+  renderRecordings();
+  return updated;
 }
 
 async function recordMixerExport(recording, exportInfo) {
   try {
-    await enqueueMixerRecordingWrite(recording.id, async () => {
-      const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
-      const history = [...(Array.isArray(latest.exportHistory) ? latest.exportHistory : []), exportInfo].slice(-10);
-      const updated = { ...latest, exportHistory: history, lastExport: exportInfo, updatedAt: Date.now() };
-      if (!recording.volatile) await putStoredRecording(updated);
-      state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
-    });
+    const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
+    const history = [...(Array.isArray(latest.exportHistory) ? latest.exportHistory : []), exportInfo].slice(-10);
+    const updated = { ...latest, exportHistory: history, lastExport: exportInfo, updatedAt: Date.now() };
+    if (!recording.volatile) await putStoredRecording(updated);
+    state.recordings = state.recordings.map((entry) => entry.id === recording.id ? updated : entry);
   } catch (error) {
     console.warn("믹스 내보내기 기록 저장 실패", error);
-  }
-}
-
-async function renameMixerSession(recording, name) {
-  return enqueueMixerRecordingWrite(recording.id, async () => {
-    const latest = state.recordings.find((entry) => entry.id === recording.id) || recording;
-    const now = Date.now();
-    const updated = { ...latest, name: safeRecordingFilename(name).slice(0, 60), safetyVersion: 2, dataRevision: (Number(latest.dataRevision) || 0) + 1, updatedAt: now, lastSavedAt: now };
-    if (!latest.volatile) await putRecordingAtomically(updated, latest, "세션 이름 변경 전");
-    state.recordings = state.recordings.map((entry) => entry.id === latest.id ? updated : entry);
-    renderRecordings();
-    return updated;
-  });
-}
-
-async function deleteMixerSession(recording) {
-  return enqueueMixerRecordingWrite(recording.id, async () => {
-    const drafts = await getMixerRecordingDrafts(recording.id).catch(() => []);
-    if (!recording.volatile) await deleteStoredRecording(recording.id);
-    await deleteMixerBackups(recording.id);
-    await Promise.allSettled(drafts.map((draft) => deleteMixerRecordingDraft(draft.draftId)));
-    try {
-      localStorage.removeItem(emergencyMirrorKey(recording.id, "current"));
-      localStorage.removeItem(emergencyMirrorKey(recording.id, "previous"));
-    } catch {}
-    state.recordings = state.recordings.filter((entry) => entry.id !== recording.id);
-    renderProjectUi();
-    renderRecordings();
-    return true;
-  });
-}
-
-async function createMixerManualCheckpoint(recording, reason = "사용자 안전 저장") {
-  return enqueueMixerRecordingWrite(recording.id, async () => {
-    const latest = state.recordings.find((entry) => String(entry.id) === String(recording.id)) || recording;
-    await saveMixerBackup(latest, reason);
-    return latest;
-  });
-}
-
-async function createMixerSessionFromMr(file) {
-  if (!(file instanceof Blob)) throw new Error("MR 오디오 파일을 선택해 주세요.");
-  const now = Date.now();
-  const baseName = String(file.name || "새 MR")
-    .replace(/\.[^.]+$/, "")
-    .replace(/[\/:*?"<>|]/g, "-")
-    .trim() || "새 MR";
-  const vocalTrackId = globalThis.crypto?.randomUUID?.() || `vocal-${now}-${Math.random().toString(36).slice(2, 8)}`;
-  const record = {
-    name: baseName,
-    memo: "믹서에서 MR을 가져와 만든 녹음 세션",
-    projectId: currentProjectId(),
-    createdAt: now,
-    updatedAt: now,
-    durationMs: 0,
-    mimeType: file.type || "audio/mpeg",
-    hasMr: true,
-    hasMrTrack: true,
-    hasSeparatedTracks: true,
-    trackVersion: 5,
-    mrName: file.name || `${baseName}.audio`,
-    mrMimeType: file.type || "audio/mpeg",
-    mrDurationMs: 0,
-    syncOffsetMs: 0,
-    vocalMimeType: "",
-    vocalBlob: null,
-    mrBlob: file,
-    extraTracks: [{ id: vocalTrackId, name: "보컬 1", createdAt: now }],
-    archivedTracks: [],
-    blob: file,
-    safetyVersion: 2,
-    dataRevision: 1,
-    mixChecksum: checksumText({}),
-    lastSavedAt: now
-  };
-  try {
-    const id = await addStoredRecording(record);
-    const updated = { ...record, id };
-    state.recordings.unshift(updated);
-    window.HoonProjects?.touch?.(record.projectId);
-    renderProjectUi();
-    renderRecordings();
-    return updated;
-  } catch (error) {
-    throw new Error(`${error.message} 브라우저 저장 공간을 확인해 주세요.`);
   }
 }
 
@@ -4523,25 +3671,7 @@ function setupMixer() {
     getRecordings: () => visibleRecordings(),
     getAudioContext: ensureAudioContext,
     saveSettings: saveMixerSettings,
-    getLatestBackup: getLatestMixerBackup,
-    restoreBackup: restoreMixerBackup,
-    createCheckpoint: createMixerManualCheckpoint,
-    getStorageStatus: getStorageSafetyStatus,
-    requestPersistentStorage,
-    exportSessionBackup: exportMixerSessionBackup,
-    importSessionBackup: importMixerSessionBackup,
-    beginRecordingDraft: beginMixerRecordingDraft,
-    appendRecordingDraftChunk: appendMixerRecordingDraftChunk,
-    getRecordingDrafts: getMixerRecordingDrafts,
-    recoverRecordingDraft: recoverMixerRecordingDraft,
-    discardRecordingDraft: deleteMixerRecordingDraft,
-    completeRecordingDraft: deleteMixerRecordingDraft,
-    createSessionFromMr: createMixerSessionFromMr,
-    renameSession: renameMixerSession,
-    deleteSession: deleteMixerSession,
     createEmptyTrack: createMixerEmptyTrack,
-    appendRecordedClip: appendMixerRecordedClip,
-    savePunchTake: saveMixerPunchTake,
     updateExtraTrack: updateMixerExtraTrack,
     removeExtraTrack: removeMixerExtraTrack,
     recordExport: recordMixerExport,
@@ -4595,7 +3725,7 @@ function activateTab(target, { stopAudio = true } = {}) {
   const status = target === "recording"
     ? `${window.HoonProjects?.getCurrent?.()?.name || "기본 프로젝트"} · 준비`
     : target === "mixer"
-      ? "MR을 가져오거나 녹음 세션을 선택하세요"
+      ? "2트랙 녹음을 선택하세요"
       : "준비됨";
   transportUpdate(TAB_LABELS[target] || "훈뮤직툴", status, false, "idle");
 }
@@ -4668,9 +3798,9 @@ async function transportPlayPause() {
 }
 
 function transportRecord() {
-  if (state.currentTab !== "mixer") activateTab("mixer", { stopAudio: false });
-  if (window.HoonMixer?.isRecording?.()) window.HoonMixer?.finishOverdub?.();
-  else window.HoonMixer?.startOverdub?.({ fromTransport: true });
+  activateTab("recording");
+  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") stopRecording();
+  else startRecording();
 }
 
 function setupTransport() {

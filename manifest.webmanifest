@@ -2,7 +2,7 @@
   "id": "./",
   "name": "훈뮤직툴 Studio - 음악 작업실",
   "short_name": "훈뮤직툴",
-  "description": "MR 가져오기, 안전 녹음 임시 저장, 편집 복구, 세션 외부 백업과 WAV 내보내기를 제공하는 개인용 음악 제작 도구",
+  "description": "PC 작업실 UI, 고정 트랙 컨트롤, 클립 개별 음소거, 비례 확대 타임라인, 원하는 구간 녹음, WAV 믹스 내보내기를 제공하는 개인용 음악 제작 도구",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

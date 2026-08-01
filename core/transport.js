@@ -38,7 +38,7 @@
   function isTypingTarget(target) {
     if (!target) return false;
     const tag = String(target.tagName || "").toLowerCase();
-    return ["input", "textarea", "select"].includes(tag) || target.isContentEditable;
+    return ["input", "textarea", "select", "button"].includes(tag) || target.isContentEditable;
   }
 
   function configure(nextCallbacks = {}) {
